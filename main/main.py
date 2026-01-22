@@ -1,9 +1,19 @@
 """우주선 게임 - 메인 시작 화면"""
+import logging
 import pygame
 import sys
-from config import SCREEN_WIDTH, SCREEN_HEIGHT, WHITE, RED, Resources, UI
+from core.config import SCREEN_WIDTH, SCREEN_HEIGHT, WHITE, RED, Resources, UI
+from core.logging_config import setup_logging
 from utils import load_image, load_music, load_font, create_button_rect, show_error_dialog
-import gameview
+from services.api_service import GameAPIClient
+from screens.auth_screen import show_auth_screen
+from screens.ranking_screen import show_ranking_screen
+from screens.profile_screen import show_profile_screen
+from screens import game_screen as gameview
+
+# 로깅 설정
+setup_logging(log_level="INFO")
+logger = logging.getLogger(__name__)
 
 
 def startView():
@@ -19,12 +29,17 @@ def startView():
             show_error_dialog("리소스 파일 오류", str(e))
             return
 
+        # API 클라이언트 초기화
+        api_client = GameAPIClient()
+
         # 화면 설정
         startScr = pygame.display.set_mode([SCREEN_WIDTH, SCREEN_HEIGHT])
         pygame.display.set_caption('원석 부수기')
 
         # 버튼 생성
         startBtnObj = create_button_rect(UI.START_BUTTON)
+        rankingBtn = create_button_rect(UI.RANKING_BUTTON)
+        profileBtn = create_button_rect(UI.PROFILE_BUTTON)
         startinfom = create_button_rect(UI.INFO_BUTTON)
         stopbt = create_button_rect(UI.QUIT_BUTTON)
 
@@ -47,9 +62,44 @@ def startView():
 
                 if event.type == pygame.MOUSEBUTTONDOWN:
                     if startBtnObj.collidepoint(event.pos):
+                        # 로그인 확인
+                        if not api_client.is_logged_in():
+                            # 로그인/회원가입 화면 표시
+                            pygame.mixer.music.stop()
+                            logged_in = show_auth_screen(startScr, backGImg, api_client)
+                            if logged_in:
+                                # 로그인 성공 후 게임 시작
+                                gameview.gameStart(api_client)
+                            # 음악 재시작
+                            try:
+                                load_music(Resources.BACKGROUND_MUSIC)
+                                pygame.mixer.music.play(-1)
+                            except pygame.error:
+                                pass
+                        else:
+                            # 이미 로그인된 경우 바로 게임 시작
+                            pygame.mixer.music.stop()
+                            gameview.gameStart(api_client)
+                            try:
+                                load_music(Resources.BACKGROUND_MUSIC)
+                                pygame.mixer.music.play(-1)
+                            except pygame.error:
+                                pass
+
+                    elif rankingBtn.collidepoint(event.pos):
+                        # 랭킹 화면
                         pygame.mixer.music.stop()
-                        gameview.gameStart()
-                        # 게임에서 돌아왔을 때 음악 재시작
+                        show_ranking_screen(startScr, backGImg, api_client)
+                        try:
+                            load_music(Resources.BACKGROUND_MUSIC)
+                            pygame.mixer.music.play(-1)
+                        except pygame.error:
+                            pass
+
+                    elif profileBtn.collidepoint(event.pos):
+                        # 프로필 화면
+                        pygame.mixer.music.stop()
+                        show_profile_screen(startScr, backGImg, api_client)
                         try:
                             load_music(Resources.BACKGROUND_MUSIC)
                             pygame.mixer.music.play(-1)
@@ -79,13 +129,26 @@ def startView():
             startText = font.render("게임 시작하기", True, RED if startBtnObj.collidepoint(mouse_pos) else WHITE)
             startScr.blit(startText, [startBtnObj.x, startBtnObj.y])
 
+            # 랭킹 버튼
+            font_small = load_font(Resources.MAIN_FONT, 28)
+            rankingText = font_small.render("🏆 랭킹", True, RED if rankingBtn.collidepoint(mouse_pos) else WHITE)
+            rankingTextRect = rankingText.get_rect(center=(rankingBtn.x + rankingBtn.width // 2, rankingBtn.y + rankingBtn.height // 2))
+            startScr.blit(rankingText, rankingTextRect)
+
+            # 프로필 버튼
+            profileText = font_small.render("👤 프로필", True, RED if profileBtn.collidepoint(mouse_pos) else WHITE)
+            profileTextRect = profileText.get_rect(center=(profileBtn.x + profileBtn.width // 2, profileBtn.y + profileBtn.height // 2))
+            startScr.blit(profileText, profileTextRect)
+
             # 정보 버튼
             startinfomtext = font.render("정보", True, RED if startinfom.collidepoint(mouse_pos) else WHITE)
-            startScr.blit(startinfomtext, [startinfom.x, startinfom.y])
+            startinfomtextRect = startinfomtext.get_rect(center=(startinfom.x + startinfom.width // 2, startinfom.y + startinfom.height // 2))
+            startScr.blit(startinfomtext, startinfomtextRect)
 
             # 나가기 버튼
             stopbttext = font.render("나가기", True, RED if stopbt.collidepoint(mouse_pos) else WHITE)
-            startScr.blit(stopbttext, [stopbt.x, stopbt.y])
+            stopbttextRect = stopbttext.get_rect(center=(stopbt.x + stopbt.width // 2, stopbt.y + stopbt.height // 2))
+            startScr.blit(stopbttext, stopbttextRect)
 
             pygame.display.flip()
 
