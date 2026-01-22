@@ -43,6 +43,15 @@ MISSILE_WIDTH = 10
 MISSILE_HEIGHT = 30
 MISSILE_SPEED = 5
 
+# 적 설정 (기본값, 난이도에 따라 조정됨)
+ENEMY_WIDTH = 50
+ENEMY_HEIGHT = 50
+ENEMY_SPEED = 2.5
+ENEMY_SPAWN_CHANCE = 0.2  # 기본 생성 확률
+ENEMY_EVASION_SKILL = 0.8  # 기본 회피 능력
+ENEMY_ATTACK_RATE = 90  # 기본 공격 주기 (프레임)
+ENEMY_PROJECTILE_SPEED = 3.0
+
 # 게임 플레이 설정
 INITIAL_HEALTH = 3
 SKILL_THRESHOLD = 10
@@ -60,6 +69,8 @@ class Resources:
     HEART_FULL = os.path.join(TEXTURE_DIR, "heart.png")
     HEART_EMPTY = os.path.join(TEXTURE_DIR, "heart2.png")
     SKILL_ICON = os.path.join(TEXTURE_DIR, "skill.png")
+    ENEMY = os.path.join(TEXTURE_DIR, "rock1.png")  # TODO: 전용 적 이미지 추가
+    ENEMY_PROJECTILE = os.path.join(TEXTURE_DIR, "mix.png")  # TODO: 전용 발사체 이미지 추가
 
     # 사운드
     BACKGROUND_MUSIC = os.path.join(TEXTURE_DIR, "backsound.mp3")

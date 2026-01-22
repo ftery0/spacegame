@@ -17,6 +17,7 @@ from game.entities import Player, Stone, Missile
 from game.collision import CollisionDetector
 from game.combo import ComboSystem
 from game.difficulty import DifficultyManager
+from game.enemy import Enemy, EnemyProjectile
 
 
 def show_game_over_screen(screen, font, score, background_img, api_client, max_combo=0):
@@ -131,11 +132,18 @@ class GameState:
         self.skill_available = False
         self.stones = []
         self.missiles = []
+        self.enemies = []
+        self.enemy_projectiles = []
         self.stone_spawn_timer = 0
         self.stone_spawn_interval = STONE_SPAWN_INTERVAL_START
         self.current_frame = 0
         self.combo_system = ComboSystem(timeout_frames=180)
         self.difficulty_manager = difficulty_manager
+
+        # 적 관련 통계
+        self.enemies_destroyed = 0
+        self.missiles_fired = 0
+        self.missiles_hit = 0
 
     def reset(self):
         """게임 상태 초기화"""
@@ -146,10 +154,15 @@ class GameState:
         self.skill_available = False
         self.stones.clear()
         self.missiles.clear()
+        self.enemies.clear()
+        self.enemy_projectiles.clear()
         self.stone_spawn_timer = 0
         self.stone_spawn_interval = STONE_SPAWN_INTERVAL_START
         self.current_frame = 0
         self.combo_system.reset()
+        self.enemies_destroyed = 0
+        self.missiles_fired = 0
+        self.missiles_hit = 0
 
     def take_damage(self):
         """플레이어 피해 입음"""
@@ -157,32 +170,49 @@ class GameState:
         if self.health <= 0:
             self.game_over = True
 
-    def add_missile_hit(self):
-        """미사일 히트 카운트"""
+    def add_missile_hit(self, is_enemy=False):
+        """
+        미사일 히트 카운트
+
+        Args:
+            is_enemy: 적을 파괴한 경우 True
+        """
         self.skill_count += 1
+        self.missiles_hit += 1
 
         # 콤보 추가
         self.combo_system.add_hit(self.current_frame)
 
-        # 콤보 배율 적용하여 점수 추가
-        base_score = 1
+        # 콤보 배율 적용하여 점수 추가 (적은 2배 점수)
+        base_score = 2 if is_enemy else 1
         multiplier = self.combo_system.get_multiplier()
         self.score += int(base_score * multiplier)
+
+        if is_enemy:
+            self.enemies_destroyed += 1
 
         if self.skill_count >= SKILL_THRESHOLD:
             self.skill_available = True
 
     def use_skill(self):
-        """스킬 사용"""
+        """스킬 사용 (모든 돌과 적 제거)"""
         if self.skill_available or self.skill_count >= SKILL_THRESHOLD:
             # 모든 돌 제거 (콤보 유지하면서)
-            num_stones = len(self.stones)
             for stone in self.stones:
                 self.combo_system.add_hit(self.current_frame)
                 multiplier = self.combo_system.get_multiplier()
                 self.score += int(1 * multiplier)
 
+            # 모든 적 제거 (적은 2배 점수)
+            for enemy in self.enemies:
+                self.combo_system.add_hit(self.current_frame)
+                multiplier = self.combo_system.get_multiplier()
+                self.score += int(2 * multiplier)
+                self.enemies_destroyed += 1
+
             self.stones.clear()
+            self.enemies.clear()
+            self.enemy_projectiles.clear()  # 적 발사체도 제거
             self.skill_available = False
             self.skill_count = 0
 
@@ -208,8 +238,25 @@ def gameStart(api_client=None, difficulty_manager=None):
         # 버튼 생성
         back_button = create_button_rect(UI.BACK_BUTTON)
 
+        # 난이도 설정 가져오기
+        if difficulty_manager:
+            difficulty_settings = difficulty_manager.get_current_settings()
+            enemy_speed = difficulty_settings.get('enemy_speed', 2.5)
+            enemy_spawn_chance = difficulty_settings.get('enemy_spawn_chance', 0.2)
+            enemy_evasion_skill = difficulty_settings.get('enemy_evasion_skill', 0.8)
+            enemy_attack_rate = difficulty_settings.get('enemy_attack_rate', 90)
+        else:
+            # 기본값 사용
+            from core.config import ENEMY_SPEED, ENEMY_SPAWN_CHANCE, ENEMY_EVASION_SKILL, ENEMY_ATTACK_RATE
+            enemy_speed = ENEMY_SPEED
+            enemy_spawn_chance = ENEMY_SPAWN_CHANCE
+            enemy_evasion_skill = ENEMY_EVASION_SKILL
+            enemy_attack_rate = ENEMY_ATTACK_RATE
+
         # 리소스 로드
         try:
+            from core.config import ENEMY_WIDTH, ENEMY_HEIGHT, ENEMY_PROJECTILE_SPEED
+
             background_img = load_image(Resources.BACKGROUND, (SCREEN_WIDTH, SCREEN_HEIGHT))
             player_img = load_image(Resources.PLAYER, (PLAYER_WIDTH, PLAYER_HEIGHT))
             stone_img = load_image(Resources.STONE, (STONE_MAX_SIZE, STONE_MAX_SIZE))
@@ -218,6 +265,8 @@ def gameStart(api_client=None, difficulty_manager=None):
             heart_full_img = load_image(Resources.HEART_FULL, (UI.HEART_SIZE, UI.HEART_SIZE))
             heart_empty_img = load_image(Resources.HEART_EMPTY, (UI.HEART_SIZE, UI.HEART_SIZE))
             skill_icon = load_image(Resources.SKILL_ICON, (UI.SKILL_ICON_SIZE, UI.SKILL_ICON_SIZE))
+            enemy_img = load_image(Resources.ENEMY, (ENEMY_WIDTH, ENEMY_HEIGHT))
+            enemy_proj_img = load_image(Resources.ENEMY_PROJECTILE, (MISSILE_WIDTH, MISSILE_HEIGHT))
 
             missile_sound = load_sound(Resources.MISSILE_SOUND)
             load_music(Resources.BACKGROUND_MUSIC)
@@ -251,6 +300,7 @@ def gameStart(api_client=None, difficulty_manager=None):
                             missile_y = player.rect.y
                             missile = Missile(missile_img, missile_x, missile_y)
                             game_state.missiles.append(missile)
+                            game_state.missiles_fired += 1
                             try:
                                 missile_sound.play()
                             except pygame.error:
@@ -300,13 +350,44 @@ def gameStart(api_client=None, difficulty_manager=None):
                         STONE_SPAWN_INTERVAL_MIN
                     )
 
-            # 돌 업데이트 및 충돌 처리
+            # 적 생성 (확률적)
+            if not game_state.game_over:
+                if random.random() < enemy_spawn_chance / 60:  # 프레임당 확률 조정
+                    enemy = Enemy(enemy_img, enemy_speed, enemy_evasion_skill)
+                    game_state.enemies.append(enemy)
+
+            # 돌 업데이트 및 그리기
             for stone in game_state.stones:
                 stone.update()
                 stone.draw(gameScr)
 
+            # 적 업데이트, 공격, 그리기
+            for enemy in game_state.enemies:
+                # 적 업데이트 (미사일 리스트 전달하여 회피 로직 실행)
+                enemy.update(game_state.missiles)
+
+                # 적 공격
+                if enemy.can_shoot(enemy_attack_rate):
+                    proj_x, proj_y = enemy.get_shoot_position()
+                    projectile = EnemyProjectile(enemy_proj_img, proj_x, proj_y, ENEMY_PROJECTILE_SPEED)
+                    game_state.enemy_projectiles.append(projectile)
+
+                # 적 그리기
+                enemy.draw(gameScr)
+
+            # 적 발사체 업데이트 및 그리기
+            for projectile in game_state.enemy_projectiles:
+                projectile.update()
+                projectile.draw(gameScr)
+
             # 충돌 감지
-            collisions = CollisionDetector.check_all_collisions(player, game_state.missiles, game_state.stones)
+            collisions = CollisionDetector.check_all_collisions(
+                player,
+                game_state.missiles,
+                game_state.stones,
+                game_state.enemies,
+                game_state.enemy_projectiles
+            )
 
             # 플레이어-운석 충돌 처리
             unique_player_stones = sorted(set(collisions['player_stone']), reverse=True)
@@ -315,20 +396,43 @@ def gameStart(api_client=None, difficulty_manager=None):
                 gameScr.blit(collision_img, (game_state.stones[stone_idx].rect.x, game_state.stones[stone_idx].rect.y))
                 del game_state.stones[stone_idx]
 
+            # 플레이어-적 충돌 처리
+            unique_player_enemies = sorted(set(collisions['player_enemy']), reverse=True)
+            for enemy_idx in unique_player_enemies:
+                game_state.take_damage()
+                gameScr.blit(collision_img, (game_state.enemies[enemy_idx].rect.x, game_state.enemies[enemy_idx].rect.y))
+                del game_state.enemies[enemy_idx]
+
+            # 플레이어-적 발사체 충돌 처리
+            unique_player_projectiles = sorted(set(collisions['player_enemy_projectile']), reverse=True)
+            for proj_idx in unique_player_projectiles:
+                game_state.take_damage()
+                del game_state.enemy_projectiles[proj_idx]
+
             # 미사일-운석 충돌 처리
-            # 중복 제거를 위해 각 인덱스를 개별적으로 수집
             stones_to_remove = set()
             missiles_to_remove = set()
             for missile_idx, stone_idx in collisions['missile_stone']:
                 if stone_idx not in stones_to_remove:
-                    game_state.add_missile_hit()
+                    game_state.add_missile_hit(is_enemy=False)
                     gameScr.blit(collision_img, (game_state.stones[stone_idx].rect.x, game_state.stones[stone_idx].rect.y))
                 stones_to_remove.add(stone_idx)
+                missiles_to_remove.add(missile_idx)
+
+            # 미사일-적 충돌 처리
+            enemies_to_remove = set()
+            for missile_idx, enemy_idx in collisions['missile_enemy']:
+                if enemy_idx not in enemies_to_remove:
+                    game_state.add_missile_hit(is_enemy=True)
+                    gameScr.blit(collision_img, (game_state.enemies[enemy_idx].rect.x, game_state.enemies[enemy_idx].rect.y))
+                enemies_to_remove.add(enemy_idx)
                 missiles_to_remove.add(missile_idx)
 
             # 큰 인덱스부터 삭제
             for stone_idx in sorted(stones_to_remove, reverse=True):
                 del game_state.stones[stone_idx]
+            for enemy_idx in sorted(enemies_to_remove, reverse=True):
+                del game_state.enemies[enemy_idx]
             for missile_idx in sorted(missiles_to_remove, reverse=True):
                 del game_state.missiles[missile_idx]
 
@@ -338,6 +442,12 @@ def gameStart(api_client=None, difficulty_manager=None):
 
             for stone_idx in sorted(collisions['stone_out'], reverse=True):
                 del game_state.stones[stone_idx]
+
+            for enemy_idx in sorted(collisions['enemy_out'], reverse=True):
+                del game_state.enemies[enemy_idx]
+
+            for proj_idx in sorted(collisions['enemy_projectile_out'], reverse=True):
+                del game_state.enemy_projectiles[proj_idx]
 
             # UI 그리기 - 체력
             if not game_state.game_over:
