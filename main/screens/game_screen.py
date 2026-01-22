@@ -15,9 +15,11 @@ from utils import (
 from services.api_service import GameAPIClient
 from game.entities import Player, Stone, Missile
 from game.collision import CollisionDetector
+from game.combo import ComboSystem
+from game.difficulty import DifficultyManager
 
 
-def show_game_over_screen(screen, font, score, background_img, api_client):
+def show_game_over_screen(screen, font, score, background_img, api_client, max_combo=0):
     """
     게임 오버 화면 및 점수 저장
 
@@ -27,6 +29,7 @@ def show_game_over_screen(screen, font, score, background_img, api_client):
         score: 최종 점수
         background_img: 배경 이미지
         api_client: API 클라이언트
+        max_combo: 최대 콤보 수
 
     Returns:
         bool: True면 재시작, False면 메뉴로
@@ -84,23 +87,33 @@ def show_game_over_screen(screen, font, score, background_img, api_client):
         score_rect = score_text.get_rect(center=(SCREEN_WIDTH // 2, 280))
         screen.blit(score_text, score_rect)
 
+        # 최대 콤보 표시
+        if max_combo > 1:
+            combo_font = load_font(Resources.MAIN_FONT, 28)
+            combo_display = combo_font.render(f"Max Combo: {max_combo}", True, (255, 215, 0))
+            combo_rect = combo_display.get_rect(center=(SCREEN_WIDTH // 2, 320))
+            screen.blit(combo_display, combo_rect)
+
         # 사용자 이름 표시 (로그인된 경우)
+        user_y = 360 if max_combo > 1 else 340
         if api_client.is_logged_in():
             user_text = font.render(f"플레이어: {api_client.session_manager.username}", True, WHITE)
-            user_rect = user_text.get_rect(center=(SCREEN_WIDTH // 2, 340))
+            user_rect = user_text.get_rect(center=(SCREEN_WIDTH // 2, user_y))
             screen.blit(user_text, user_rect)
 
         # 저장 메시지
+        message_y = 420 if max_combo > 1 else 400
         message_color = (0, 255, 0) if score_saved else (255, 200, 0)
         small_font = load_font(Resources.MAIN_FONT, 22)
         save_text = small_font.render(save_message, True, message_color)
-        save_rect = save_text.get_rect(center=(SCREEN_WIDTH // 2, 400))
+        save_rect = save_text.get_rect(center=(SCREEN_WIDTH // 2, message_y))
         screen.blit(save_text, save_rect)
 
         # 종료 안내
+        hint_y = 500 if max_combo > 1 else 480
         hint_font = load_font(Resources.MAIN_FONT, 20)
         hint_text = hint_font.render("아무 키나 눌러 메뉴로...", True, (150, 150, 150))
-        hint_rect = hint_text.get_rect(center=(SCREEN_WIDTH // 2, 480))
+        hint_rect = hint_text.get_rect(center=(SCREEN_WIDTH // 2, hint_y))
         screen.blit(hint_text, hint_rect)
 
         pygame.display.flip()
@@ -110,7 +123,7 @@ def show_game_over_screen(screen, font, score, background_img, api_client):
 class GameState:
     """게임 상태 관리"""
 
-    def __init__(self):
+    def __init__(self, difficulty_manager=None):
         self.score = 0
         self.health = INITIAL_HEALTH
         self.game_over = False
@@ -120,6 +133,9 @@ class GameState:
         self.missiles = []
         self.stone_spawn_timer = 0
         self.stone_spawn_interval = STONE_SPAWN_INTERVAL_START
+        self.current_frame = 0
+        self.combo_system = ComboSystem(timeout_frames=180)
+        self.difficulty_manager = difficulty_manager
 
     def reset(self):
         """게임 상태 초기화"""
@@ -132,6 +148,8 @@ class GameState:
         self.missiles.clear()
         self.stone_spawn_timer = 0
         self.stone_spawn_interval = STONE_SPAWN_INTERVAL_START
+        self.current_frame = 0
+        self.combo_system.reset()
 
     def take_damage(self):
         """플레이어 피해 입음"""
@@ -142,27 +160,40 @@ class GameState:
     def add_missile_hit(self):
         """미사일 히트 카운트"""
         self.skill_count += 1
-        self.score += 1
+
+        # 콤보 추가
+        self.combo_system.add_hit(self.current_frame)
+
+        # 콤보 배율 적용하여 점수 추가
+        base_score = 1
+        multiplier = self.combo_system.get_multiplier()
+        self.score += int(base_score * multiplier)
+
         if self.skill_count >= SKILL_THRESHOLD:
             self.skill_available = True
 
     def use_skill(self):
         """스킬 사용"""
         if self.skill_available or self.skill_count >= SKILL_THRESHOLD:
-            # 모든 돌 제거
+            # 모든 돌 제거 (콤보 유지하면서)
+            num_stones = len(self.stones)
             for stone in self.stones:
-                self.score += 1
+                self.combo_system.add_hit(self.current_frame)
+                multiplier = self.combo_system.get_multiplier()
+                self.score += int(1 * multiplier)
+
             self.stones.clear()
             self.skill_available = False
             self.skill_count = 0
 
 
-def gameStart(api_client=None):
+def gameStart(api_client=None, difficulty_manager=None):
     """
     게임 플레이 화면
 
     Args:
         api_client: API 클라이언트 (선택사항, 없으면 오프라인 모드)
+        difficulty_manager: 난이도 관리자 (선택사항)
     """
     try:
         # API 클라이언트가 없으면 생성 (오프라인 모드)
@@ -198,7 +229,7 @@ def gameStart(api_client=None):
             return
 
         # 게임 상태 초기화
-        game_state = GameState()
+        game_state = GameState(difficulty_manager)
         player = Player(player_img)
 
         # 메인 게임 루프
@@ -228,6 +259,11 @@ def gameStart(api_client=None):
                     elif event.key == pygame.K_f or event.unicode == "ㄹ":
                         # 스킬 사용
                         game_state.use_skill()
+
+            # 프레임 카운터 및 콤보 시스템 업데이트
+            if not game_state.game_over:
+                game_state.current_frame += 1
+                game_state.combo_system.update(game_state.current_frame)
 
             # 플레이어 움직임
             if not game_state.game_over:
@@ -328,6 +364,43 @@ def gameStart(api_client=None):
                 )
                 gameScr.blit(skill_text, [10, 650])
 
+            # UI 그리기 - 콤보 시스템
+            combo_text = game_state.combo_system.get_display_text()
+            if combo_text:
+                # 콤보 텍스트 (화면 중앙 상단)
+                combo_font = load_font(Resources.MAIN_FONT, 48)
+                combo_surface = combo_font.render(combo_text, True, (255, 215, 0))  # 골드 색상
+                combo_rect = combo_surface.get_rect(center=(SCREEN_WIDTH // 2, 100))
+                gameScr.blit(combo_surface, combo_rect)
+
+                # 배율 텍스트
+                multiplier_text = game_state.combo_system.get_multiplier_text()
+                mult_font = load_font(Resources.MAIN_FONT, 32)
+                mult_surface = mult_font.render(multiplier_text, True, (255, 165, 0))  # 오렌지 색상
+                mult_rect = mult_surface.get_rect(center=(SCREEN_WIDTH // 2, 145))
+                gameScr.blit(mult_surface, mult_rect)
+
+                # 타이머 바 (콤보 아래)
+                timer_percent = game_state.combo_system.get_timer_percent()
+                bar_width = 200
+                bar_height = 8
+                bar_x = SCREEN_WIDTH // 2 - bar_width // 2
+                bar_y = 170
+
+                # 배경 바
+                pygame.draw.rect(gameScr, (100, 100, 100), (bar_x, bar_y, bar_width, bar_height))
+
+                # 진행 바 (시간이 줄어들면 색상도 변경)
+                if timer_percent > 0.5:
+                    bar_color = (0, 255, 0)  # 초록
+                elif timer_percent > 0.25:
+                    bar_color = (255, 255, 0)  # 노랑
+                else:
+                    bar_color = (255, 0, 0)  # 빨강
+
+                current_bar_width = int(bar_width * timer_percent)
+                pygame.draw.rect(gameScr, bar_color, (bar_x, bar_y, current_bar_width, bar_height))
+
             # UI 그리기 - BACK 버튼
             mouse_pos = pygame.mouse.get_pos()
             back_text = font.render("BACK", True, RED if back_button.collidepoint(mouse_pos) else WHITE)
@@ -338,7 +411,8 @@ def gameStart(api_client=None):
                 # 게임 오버 화면 표시 및 점수 저장
                 pygame.display.flip()
                 pygame.time.wait(1000)  # 1초 대기
-                show_game_over_screen(gameScr, font, game_state.score, background_img, api_client)
+                max_combo = game_state.combo_system.get_max_combo()
+                show_game_over_screen(gameScr, font, game_state.score, background_img, api_client, max_combo)
                 running = False  # 메인 메뉴로 돌아가기
 
             pygame.display.flip()
