@@ -4,6 +4,7 @@ from typing import List, Tuple, TYPE_CHECKING
 if TYPE_CHECKING:
     from game.entities import Player, Stone, Missile
     from game.enemy import Enemy, EnemyProjectile
+    from game.powerup import PowerUp
 
 
 class CollisionDetector:
@@ -197,12 +198,34 @@ class CollisionDetector:
         return out_of_bounds
 
     @staticmethod
+    def check_player_powerup_collision(player, powerups: List) -> List[int]:
+        """
+        플레이어와 파워업의 충돌 확인
+
+        Args:
+            player: 플레이어
+            powerups: 파워업 리스트
+
+        Returns:
+            List[int]: 충돌한 파워업의 인덱스 리스트
+        """
+        collisions = []
+        player_rect = player.get_rect()
+
+        for powerup_idx, powerup in enumerate(powerups):
+            if player_rect.colliderect(powerup.rect):
+                collisions.append(powerup_idx)
+
+        return collisions
+
+    @staticmethod
     def check_all_collisions(
         player,
         missiles: List,
         stones: List,
         enemies: List = None,
-        enemy_projectiles: List = None
+        enemy_projectiles: List = None,
+        powerups: List = None
     ) -> dict:
         """
         모든 충돌 확인
@@ -213,6 +236,7 @@ class CollisionDetector:
             stones: 운석 리스트
             enemies: 적 리스트 (선택사항)
             enemy_projectiles: 적 발사체 리스트 (선택사항)
+            powerups: 파워업 리스트 (선택사항)
 
         Returns:
             dict: 충돌 정보 딕셔너리
@@ -225,11 +249,13 @@ class CollisionDetector:
                     'player_enemy': [적_idx, ...],
                     'player_enemy_projectile': [발사체_idx, ...],
                     'enemy_out': [적_idx, ...],
-                    'enemy_projectile_out': [발사체_idx, ...]
+                    'enemy_projectile_out': [발사체_idx, ...],
+                    'player_powerup': [파워업_idx, ...]
                 }
         """
         enemies = enemies or []
         enemy_projectiles = enemy_projectiles or []
+        powerups = powerups or []
 
         return {
             'missile_stone': CollisionDetector.check_missile_stone_collision(missiles, stones),
@@ -240,5 +266,6 @@ class CollisionDetector:
             'player_enemy': CollisionDetector.check_player_enemy_collision(player, enemies),
             'player_enemy_projectile': CollisionDetector.check_player_enemy_projectile_collision(player, enemy_projectiles),
             'enemy_out': CollisionDetector.check_enemy_out_of_bounds(enemies),
-            'enemy_projectile_out': CollisionDetector.check_enemy_projectile_out_of_bounds(enemy_projectiles)
+            'enemy_projectile_out': CollisionDetector.check_enemy_projectile_out_of_bounds(enemy_projectiles),
+            'player_powerup': CollisionDetector.check_player_powerup_collision(player, powerups)
         }

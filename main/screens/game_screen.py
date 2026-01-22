@@ -18,6 +18,7 @@ from game.collision import CollisionDetector
 from game.combo import ComboSystem
 from game.difficulty import DifficultyManager
 from game.enemy import Enemy, EnemyProjectile
+from game.powerup import PowerUp, PowerUpType, PowerUpManager
 
 
 def show_game_over_screen(screen, font, score, background_img, api_client, max_combo=0):
@@ -139,11 +140,16 @@ class GameState:
         self.current_frame = 0
         self.combo_system = ComboSystem(timeout_frames=180)
         self.difficulty_manager = difficulty_manager
+        self.powerup_manager = PowerUpManager()
 
         # 적 관련 통계
         self.enemies_destroyed = 0
         self.missiles_fired = 0
         self.missiles_hit = 0
+
+        # 플레이어 상태 (파워업 효과)
+        self.player_speed_multiplier = 1.0
+        self.is_invincible = False
 
     def reset(self):
         """게임 상태 초기화"""
@@ -160,12 +166,18 @@ class GameState:
         self.stone_spawn_interval = STONE_SPAWN_INTERVAL_START
         self.current_frame = 0
         self.combo_system.reset()
+        self.powerup_manager.clear_powerups()
         self.enemies_destroyed = 0
         self.missiles_fired = 0
         self.missiles_hit = 0
+        self.player_speed_multiplier = 1.0
+        self.is_invincible = False
 
     def take_damage(self):
-        """플레이어 피해 입음"""
+        """플레이어 피해 입음 (무적 상태면 무시)"""
+        if self.is_invincible:
+            return  # 무적 상태에서는 피해 무시
+
         self.health -= 1
         if self.health <= 0:
             self.game_over = True
@@ -186,6 +198,11 @@ class GameState:
         # 콤보 배율 적용하여 점수 추가 (적은 2배 점수)
         base_score = 2 if is_enemy else 1
         multiplier = self.combo_system.get_multiplier()
+
+        # 점수 배율 파워업 적용
+        if self.powerup_manager.is_effect_active(PowerUpType.SCORE_MULTIPLIER):
+            multiplier *= 2.0
+
         self.score += int(base_score * multiplier)
 
         if is_enemy:
@@ -215,6 +232,41 @@ class GameState:
             self.enemy_projectiles.clear()  # 적 발사체도 제거
             self.skill_available = False
             self.skill_count = 0
+
+    def apply_powerup(self, powerup_type: PowerUpType):
+        """
+        파워업 효과 적용
+
+        Args:
+            powerup_type: 파워업 타입
+        """
+        if powerup_type == PowerUpType.HEALTH:
+            # 체력 회복 (최대치까지)
+            self.health = min(self.health + 1, INITIAL_HEALTH)
+        elif powerup_type == PowerUpType.SHIELD:
+            # 무적 효과
+            self.powerup_manager.activate_powerup(powerup_type)
+            self.is_invincible = True
+        elif powerup_type == PowerUpType.SPEED_BOOST:
+            # 속도 증가
+            self.powerup_manager.activate_powerup(powerup_type)
+            self.player_speed_multiplier = 1.5
+        elif powerup_type == PowerUpType.MULTI_SHOT:
+            # 3연발
+            self.powerup_manager.activate_powerup(powerup_type)
+        elif powerup_type == PowerUpType.SCORE_MULTIPLIER:
+            # 점수 2배
+            self.powerup_manager.activate_powerup(powerup_type)
+
+    def update_powerup_effects(self):
+        """파워업 효과 상태 업데이트"""
+        # 무적 효과 확인
+        if not self.powerup_manager.is_effect_active(PowerUpType.SHIELD):
+            self.is_invincible = False
+
+        # 속도 증가 효과 확인
+        if not self.powerup_manager.is_effect_active(PowerUpType.SPEED_BOOST):
+            self.player_speed_multiplier = 1.0
 
 
 def gameStart(api_client=None, difficulty_manager=None):
@@ -296,11 +348,33 @@ def gameStart(api_client=None, difficulty_manager=None):
                     if event.key == pygame.K_SPACE:
                         # 미사일 발사
                         if not game_state.game_over:
-                            missile_x = player.rect.x + PLAYER_WIDTH / 2 - MISSILE_WIDTH / 2
-                            missile_y = player.rect.y
-                            missile = Missile(missile_img, missile_x, missile_y)
-                            game_state.missiles.append(missile)
-                            game_state.missiles_fired += 1
+                            # 멀티샷 파워업 확인
+                            if game_state.powerup_manager.is_effect_active(PowerUpType.MULTI_SHOT):
+                                # 3연발
+                                missile_x = player.rect.x + PLAYER_WIDTH / 2 - MISSILE_WIDTH / 2
+                                missile_y = player.rect.y
+
+                                # 중앙
+                                missile_center = Missile(missile_img, missile_x, missile_y)
+                                game_state.missiles.append(missile_center)
+
+                                # 왼쪽
+                                missile_left = Missile(missile_img, missile_x - 15, missile_y)
+                                game_state.missiles.append(missile_left)
+
+                                # 오른쪽
+                                missile_right = Missile(missile_img, missile_x + 15, missile_y)
+                                game_state.missiles.append(missile_right)
+
+                                game_state.missiles_fired += 3
+                            else:
+                                # 일반 발사
+                                missile_x = player.rect.x + PLAYER_WIDTH / 2 - MISSILE_WIDTH / 2
+                                missile_y = player.rect.y
+                                missile = Missile(missile_img, missile_x, missile_y)
+                                game_state.missiles.append(missile)
+                                game_state.missiles_fired += 1
+
                             try:
                                 missile_sound.play()
                             except pygame.error:
@@ -314,18 +388,29 @@ def gameStart(api_client=None, difficulty_manager=None):
             if not game_state.game_over:
                 game_state.current_frame += 1
                 game_state.combo_system.update(game_state.current_frame)
+                game_state.powerup_manager.update_effects()
+                game_state.update_powerup_effects()
 
-            # 플레이어 움직임
+            # 플레이어 움직임 (속도 파워업 적용)
             if not game_state.game_over:
                 keys = pygame.key.get_pressed()
+                # 원래 속도에 multiplier 적용
                 if keys[pygame.K_UP]:
-                    player.move_up()
+                    player.rect.y -= PLAYER_SPEED * game_state.player_speed_multiplier
+                    if player.rect.y < 0:
+                        player.rect.y = 0
                 if keys[pygame.K_DOWN]:
-                    player.move_down()
+                    player.rect.y += PLAYER_SPEED * game_state.player_speed_multiplier
+                    if player.rect.y > SCREEN_HEIGHT - PLAYER_HEIGHT:
+                        player.rect.y = SCREEN_HEIGHT - PLAYER_HEIGHT
                 if keys[pygame.K_LEFT]:
-                    player.move_left()
+                    player.rect.x -= PLAYER_SPEED * game_state.player_speed_multiplier
+                    if player.rect.x < 0:
+                        player.rect.x = 0
                 if keys[pygame.K_RIGHT]:
-                    player.move_right()
+                    player.rect.x += PLAYER_SPEED * game_state.player_speed_multiplier
+                    if player.rect.x > SCREEN_WIDTH - PLAYER_WIDTH:
+                        player.rect.x = SCREEN_WIDTH - PLAYER_WIDTH
 
             # 배경 그리기
             gameScr.blit(background_img, [0, 0])
@@ -356,6 +441,11 @@ def gameStart(api_client=None, difficulty_manager=None):
                     enemy = Enemy(enemy_img, enemy_speed, enemy_evasion_skill)
                     game_state.enemies.append(enemy)
 
+            # 파워업 생성 (확률적, 약 5초마다 1개)
+            if not game_state.game_over:
+                if random.random() < 0.003:  # 약 0.3% 확률 (60 FPS 기준 약 5초마다 1개)
+                    game_state.powerup_manager.spawn_random_powerup()
+
             # 돌 업데이트 및 그리기
             for stone in game_state.stones:
                 stone.update()
@@ -380,13 +470,18 @@ def gameStart(api_client=None, difficulty_manager=None):
                 projectile.update()
                 projectile.draw(gameScr)
 
+            # 파워업 업데이트 및 그리기
+            game_state.powerup_manager.update_powerups()
+            game_state.powerup_manager.draw_powerups(gameScr, load_font(Resources.MAIN_FONT, 20))
+
             # 충돌 감지
             collisions = CollisionDetector.check_all_collisions(
                 player,
                 game_state.missiles,
                 game_state.stones,
                 game_state.enemies,
-                game_state.enemy_projectiles
+                game_state.enemy_projectiles,
+                game_state.powerup_manager.get_active_powerups()
             )
 
             # 플레이어-운석 충돌 처리
@@ -408,6 +503,13 @@ def gameStart(api_client=None, difficulty_manager=None):
             for proj_idx in unique_player_projectiles:
                 game_state.take_damage()
                 del game_state.enemy_projectiles[proj_idx]
+
+            # 플레이어-파워업 충돌 처리
+            unique_player_powerups = sorted(set(collisions['player_powerup']), reverse=True)
+            for powerup_idx in unique_player_powerups:
+                powerup = game_state.powerup_manager.get_active_powerups()[powerup_idx]
+                game_state.apply_powerup(powerup.type)
+                del game_state.powerup_manager.active_powerups[powerup_idx]
 
             # 미사일-운석 충돌 처리
             stones_to_remove = set()
@@ -510,6 +612,14 @@ def gameStart(api_client=None, difficulty_manager=None):
 
                 current_bar_width = int(bar_width * timer_percent)
                 pygame.draw.rect(gameScr, bar_color, (bar_x, bar_y, current_bar_width, bar_height))
+
+            # UI 그리기 - 활성 파워업 효과
+            effect_font = load_font(Resources.MAIN_FONT, 18)
+            game_state.powerup_manager.draw_active_effects_ui(gameScr, effect_font, 10, 100)
+
+            # 무적 상태 표시 (화면 테두리)
+            if game_state.is_invincible:
+                pygame.draw.rect(gameScr, (100, 200, 255), (0, 0, SCREEN_WIDTH, SCREEN_HEIGHT), 5)
 
             # UI 그리기 - BACK 버튼
             mouse_pos = pygame.mouse.get_pos()
