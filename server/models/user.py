@@ -16,6 +16,8 @@ class User(Base):
 
     # 관계 설정
     scores = relationship("Score", back_populates="user", cascade="all, delete-orphan")
+    game_stats = relationship("GameStat", back_populates="user", cascade="all, delete-orphan")
+    user_achievements = relationship("UserAchievement", back_populates="user", cascade="all, delete-orphan")
 
     def __repr__(self):
         return f"<User(username={self.username})>"
