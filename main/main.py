@@ -9,7 +9,9 @@ from services.api_service import GameAPIClient
 from screens.auth_screen import show_auth_screen
 from screens.ranking_screen import show_ranking_screen
 from screens.profile_screen import show_profile_screen
+from screens.difficulty_screen import show_difficulty_screen
 from screens import game_screen as gameview
+from game.difficulty import DifficultyManager
 
 # 로깅 설정
 setup_logging(log_level="INFO")
@@ -31,6 +33,20 @@ def startView():
 
         # API 클라이언트 초기화
         api_client = GameAPIClient()
+
+        # 난이도 관리자 초기화
+        difficulty_manager = DifficultyManager()
+
+        # 서버에서 난이도 설정 가져오기
+        try:
+            success, difficulties, error = api_client.get_difficulties()
+            if success and difficulties:
+                difficulty_manager.update_from_api(difficulties)
+                logger.info(f"난이도 설정 {len(difficulties)}개 로드 완료")
+            else:
+                logger.warning(f"난이도 설정 로드 실패, 기본값 사용: {error}")
+        except Exception as e:
+            logger.error(f"난이도 설정 로드 중 오류: {str(e)}")
 
         # 화면 설정
         startScr = pygame.display.set_mode([SCREEN_WIDTH, SCREEN_HEIGHT])
@@ -68,8 +84,9 @@ def startView():
                             pygame.mixer.music.stop()
                             logged_in = show_auth_screen(startScr, backGImg, api_client)
                             if logged_in:
-                                # 로그인 성공 후 게임 시작
-                                gameview.gameStart(api_client)
+                                # 로그인 성공 후 난이도 선택 -> 게임 시작
+                                show_difficulty_screen(startScr, backGImg, difficulty_manager)
+                                gameview.gameStart(api_client, difficulty_manager)
                             # 음악 재시작
                             try:
                                 load_music(Resources.BACKGROUND_MUSIC)
@@ -77,9 +94,10 @@ def startView():
                             except pygame.error:
                                 pass
                         else:
-                            # 이미 로그인된 경우 바로 게임 시작
+                            # 이미 로그인된 경우 난이도 선택 -> 게임 시작
                             pygame.mixer.music.stop()
-                            gameview.gameStart(api_client)
+                            show_difficulty_screen(startScr, backGImg, difficulty_manager)
+                            gameview.gameStart(api_client, difficulty_manager)
                             try:
                                 load_music(Resources.BACKGROUND_MUSIC)
                                 pygame.mixer.music.play(-1)

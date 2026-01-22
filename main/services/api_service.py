@@ -226,6 +226,112 @@ class GameAPIClient:
         except requests.exceptions.RequestException:
             return False
 
+    def get_difficulties(self) -> tuple[bool, Optional[List], Optional[str]]:
+        """
+        난이도 설정 조회
+
+        Returns:
+            tuple: (성공 여부, 난이도 리스트, 에러 메시지)
+        """
+        try:
+            response = requests.get(
+                f"{self.base_url}/api/difficulties",
+                timeout=5
+            )
+
+            if response.status_code == 200:
+                logger.info("난이도 설정 조회 성공")
+                return True, response.json(), None
+            else:
+                error_msg = response.json().get("detail", "난이도 조회 실패")
+                logger.warning(f"난이도 조회 실패: {error_msg}")
+                return False, None, error_msg
+
+        except requests.exceptions.RequestException as e:
+            logger.error(f"난이도 조회 네트워크 오류: {str(e)}")
+            return False, None, f"네트워크 오류: {str(e)}"
+
+    def save_game_stat(self, stat_data: Dict) -> tuple[bool, Optional[Dict], Optional[str]]:
+        """
+        게임 통계 저장
+
+        Args:
+            stat_data: 게임 통계 데이터
+
+        Returns:
+            tuple: (성공 여부, 응답 데이터, 에러 메시지)
+        """
+        if not self.session_manager.is_logged_in():
+            return False, None, "로그인이 필요합니다"
+
+        try:
+            response = requests.post(
+                f"{self.base_url}/api/stats",
+                json=stat_data,
+                headers=self._get_headers(),
+                timeout=5
+            )
+
+            if response.status_code == 201:
+                logger.info("게임 통계 저장 성공")
+                return True, response.json(), None
+            else:
+                error_msg = response.json().get("detail", "통계 저장 실패")
+                logger.warning(f"통계 저장 실패: {error_msg}")
+                return False, None, error_msg
+
+        except requests.exceptions.RequestException as e:
+            logger.error(f"통계 저장 네트워크 오류: {str(e)}")
+            return False, None, f"네트워크 오류: {str(e)}"
+
+    def get_achievements(self) -> tuple[bool, Optional[List], Optional[str]]:
+        """
+        모든 업적 조회
+
+        Returns:
+            tuple: (성공 여부, 업적 리스트, 에러 메시지)
+        """
+        try:
+            response = requests.get(
+                f"{self.base_url}/api/achievements",
+                timeout=5
+            )
+
+            if response.status_code == 200:
+                return True, response.json(), None
+            else:
+                error_msg = response.json().get("detail", "업적 조회 실패")
+                return False, None, error_msg
+
+        except requests.exceptions.RequestException as e:
+            return False, None, f"네트워크 오류: {str(e)}"
+
+    def get_my_achievements(self) -> tuple[bool, Optional[List], Optional[str]]:
+        """
+        내 업적 조회
+
+        Returns:
+            tuple: (성공 여부, 내 업적 리스트, 에러 메시지)
+        """
+        if not self.session_manager.is_logged_in():
+            return False, None, "로그인이 필요합니다"
+
+        try:
+            response = requests.get(
+                f"{self.base_url}/api/achievements/my",
+                headers=self._get_headers(),
+                timeout=5
+            )
+
+            if response.status_code == 200:
+                return True, response.json(), None
+            else:
+                error_msg = response.json().get("detail", "내 업적 조회 실패")
+                return False, None, error_msg
+
+        except requests.exceptions.RequestException as e:
+            return False, None, f"네트워크 오류: {str(e)}"
+
     def logout(self):
         """로그아웃 처리"""
         self.session_manager.logout()
