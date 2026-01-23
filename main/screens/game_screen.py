@@ -1,6 +1,7 @@
 """게임 플레이 및 정보 화면"""
 import pygame
 import random
+import logging
 from core.config import (
     SCREEN_WIDTH, SCREEN_HEIGHT, WHITE, RED,
     PLAYER_WIDTH, PLAYER_HEIGHT, PLAYER_SPEED, PLAYER_START_X, PLAYER_START_Y,
@@ -19,9 +20,15 @@ from game.combo import ComboSystem
 from game.difficulty import DifficultyManager
 from game.enemy import Enemy, EnemyProjectile
 from game.powerup import PowerUp, PowerUpType, PowerUpManager
+from game.stage import StageManager
+from game.statistics import GameStatistics
+from game.achievements import AchievementChecker
+
+logger = logging.getLogger(__name__)
 
 
-def show_game_over_screen(screen, font, score, background_img, api_client, max_combo=0):
+def show_game_over_screen(screen, font, score, background_img, api_client, max_combo=0,
+                          statistics=None, achievements_unlocked=None):
     """
     게임 오버 화면 및 점수 저장
 
@@ -32,14 +39,17 @@ def show_game_over_screen(screen, font, score, background_img, api_client, max_c
         background_img: 배경 이미지
         api_client: API 클라이언트
         max_combo: 최대 콤보 수
+        statistics: 게임 통계 (GameStatistics 객체)
+        achievements_unlocked: 이번 게임에서 달성한 업적 리스트
 
     Returns:
         bool: True면 재시작, False면 메뉴로
     """
     score_saved = False
+    stats_saved = False
     save_message = ""
 
-    # 로그인되어 있으면 자동으로 점수 저장 시도
+    # 로그인되어 있으면 자동으로 점수 및 통계 저장 시도
     if api_client.is_logged_in():
         result = api_client.save_score(score)
         if result:
@@ -47,11 +57,25 @@ def show_game_over_screen(screen, font, score, background_img, api_client, max_c
             score_saved = True
 
             # 통계 조회
-            stats = api_client.get_my_stats()
-            if stats:
-                save_message += f" | 랭킹: {stats['rank']}위"
+            user_stats = api_client.get_my_stats()
+            if user_stats:
+                save_message += f" | 랭킹: {user_stats['rank']}위"
         else:
             save_message = "점수 저장 실패 (서버 오류)"
+
+        # 상세 통계 저장
+        if statistics:
+            try:
+                stats_data = statistics.to_dict()
+                stats_data['final_score'] = score
+                success, data, error = api_client.save_game_stat(stats_data)
+                if success:
+                    stats_saved = True
+                    logger.info("게임 통계 저장 성공")
+                else:
+                    logger.warning(f"게임 통계 저장 실패: {error}")
+            except Exception as e:
+                logger.error(f"통계 저장 실패: {e}")
     else:
         save_message = "오프라인 모드 (점수 저장 안됨)"
 
@@ -89,33 +113,71 @@ def show_game_over_screen(screen, font, score, background_img, api_client, max_c
         score_rect = score_text.get_rect(center=(SCREEN_WIDTH // 2, 280))
         screen.blit(score_text, score_rect)
 
-        # 최대 콤보 표시
-        if max_combo > 1:
-            combo_font = load_font(Resources.MAIN_FONT, 28)
-            combo_display = combo_font.render(f"Max Combo: {max_combo}", True, (255, 215, 0))
-            combo_rect = combo_display.get_rect(center=(SCREEN_WIDTH // 2, 320))
+        # 통계 표시
+        y_offset = 320
+        stats_font = load_font(Resources.MAIN_FONT, 24)
+
+        if statistics:
+            # 최대 콤보
+            combo_display = stats_font.render(f"Max Combo: {max_combo}", True, (255, 215, 0))
+            combo_rect = combo_display.get_rect(center=(SCREEN_WIDTH // 2, y_offset))
             screen.blit(combo_display, combo_rect)
+            y_offset += 35
+
+            # 스테이지
+            stage_text = stats_font.render(f"Stage: {statistics.max_stage}", True, (100, 200, 255))
+            stage_rect = stage_text.get_rect(center=(SCREEN_WIDTH // 2, y_offset))
+            screen.blit(stage_text, stage_rect)
+            y_offset += 35
+
+            # 명중률
+            accuracy_color = (0, 255, 0) if statistics.get_accuracy() >= 70 else (255, 255, 100)
+            accuracy_text = stats_font.render(f"Accuracy: {statistics.get_accuracy():.1f}%", True, accuracy_color)
+            accuracy_rect = accuracy_text.get_rect(center=(SCREEN_WIDTH // 2, y_offset))
+            screen.blit(accuracy_text, accuracy_rect)
+            y_offset += 35
+        elif max_combo > 1:
+            combo_display = stats_font.render(f"Max Combo: {max_combo}", True, (255, 215, 0))
+            combo_rect = combo_display.get_rect(center=(SCREEN_WIDTH // 2, y_offset))
+            screen.blit(combo_display, combo_rect)
+            y_offset += 35
+
+        # 업적 표시
+        if achievements_unlocked and len(achievements_unlocked) > 0:
+            achievement_font = load_font(Resources.MAIN_FONT, 20)
+            achievement_title = achievement_font.render("🏆 업적 달성!", True, (255, 215, 0))
+            achievement_title_rect = achievement_title.get_rect(center=(SCREEN_WIDTH // 2, y_offset))
+            screen.blit(achievement_title, achievement_title_rect)
+            y_offset += 30
+
+            from game.achievements import AchievementChecker
+            checker = AchievementChecker()
+            for achievement_code in achievements_unlocked[:3]:  # 최대 3개만 표시
+                ach_name = checker.get_achievement_display_name(achievement_code)
+                ach_text = achievement_font.render(f"• {ach_name}", True, (200, 200, 255))
+                ach_rect = ach_text.get_rect(center=(SCREEN_WIDTH // 2, y_offset))
+                screen.blit(ach_text, ach_rect)
+                y_offset += 25
 
         # 사용자 이름 표시 (로그인된 경우)
-        user_y = 360 if max_combo > 1 else 340
+        y_offset += 10
         if api_client.is_logged_in():
-            user_text = font.render(f"플레이어: {api_client.session_manager.username}", True, WHITE)
-            user_rect = user_text.get_rect(center=(SCREEN_WIDTH // 2, user_y))
+            user_text = stats_font.render(f"플레이어: {api_client.session_manager.username}", True, WHITE)
+            user_rect = user_text.get_rect(center=(SCREEN_WIDTH // 2, y_offset))
             screen.blit(user_text, user_rect)
+            y_offset += 40
 
         # 저장 메시지
-        message_y = 420 if max_combo > 1 else 400
         message_color = (0, 255, 0) if score_saved else (255, 200, 0)
-        small_font = load_font(Resources.MAIN_FONT, 22)
+        small_font = load_font(Resources.MAIN_FONT, 20)
         save_text = small_font.render(save_message, True, message_color)
-        save_rect = save_text.get_rect(center=(SCREEN_WIDTH // 2, message_y))
+        save_rect = save_text.get_rect(center=(SCREEN_WIDTH // 2, y_offset))
         screen.blit(save_text, save_rect)
 
         # 종료 안내
-        hint_y = 500 if max_combo > 1 else 480
-        hint_font = load_font(Resources.MAIN_FONT, 20)
+        hint_font = load_font(Resources.MAIN_FONT, 18)
         hint_text = hint_font.render("아무 키나 눌러 메뉴로...", True, (150, 150, 150))
-        hint_rect = hint_text.get_rect(center=(SCREEN_WIDTH // 2, hint_y))
+        hint_rect = hint_text.get_rect(center=(SCREEN_WIDTH // 2, SCREEN_HEIGHT - 50))
         screen.blit(hint_text, hint_rect)
 
         pygame.display.flip()
@@ -125,7 +187,7 @@ def show_game_over_screen(screen, font, score, background_img, api_client, max_c
 class GameState:
     """게임 상태 관리"""
 
-    def __init__(self, difficulty_manager=None):
+    def __init__(self, difficulty_manager=None, api_client=None):
         self.score = 0
         self.health = INITIAL_HEALTH
         self.game_over = False
@@ -142,7 +204,13 @@ class GameState:
         self.difficulty_manager = difficulty_manager
         self.powerup_manager = PowerUpManager()
 
-        # 적 관련 통계
+        # 새로운 시스템들
+        self.stage_manager = StageManager()
+        difficulty_name = difficulty_manager.current_difficulty if difficulty_manager else "medium"
+        self.statistics = GameStatistics(difficulty=difficulty_name)
+        self.achievement_checker = AchievementChecker(api_client)
+
+        # 적 관련 통계 (하위 호환성 유지)
         self.enemies_destroyed = 0
         self.missiles_fired = 0
         self.missiles_hit = 0
@@ -167,6 +235,9 @@ class GameState:
         self.current_frame = 0
         self.combo_system.reset()
         self.powerup_manager.clear_powerups()
+        self.stage_manager.reset()
+        self.statistics.reset()
+        self.achievement_checker.reset()
         self.enemies_destroyed = 0
         self.missiles_fired = 0
         self.missiles_hit = 0
@@ -179,6 +250,7 @@ class GameState:
             return  # 무적 상태에서는 피해 무시
 
         self.health -= 1
+        self.statistics.on_damage_taken()  # 통계 기록
         if self.health <= 0:
             self.game_over = True
 
@@ -192,8 +264,16 @@ class GameState:
         self.skill_count += 1
         self.missiles_hit += 1
 
+        # 통계 업데이트
+        self.statistics.on_missile_hit()
+        if is_enemy:
+            self.statistics.on_enemy_destroyed()
+        else:
+            self.statistics.on_stone_destroyed()
+
         # 콤보 추가
         self.combo_system.add_hit(self.current_frame)
+        self.statistics.on_combo_update(self.combo_system.get_combo_count())
 
         # 콤보 배율 적용하여 점수 추가 (적은 2배 점수)
         base_score = 2 if is_enemy else 1
@@ -214,15 +294,22 @@ class GameState:
     def use_skill(self):
         """스킬 사용 (모든 돌과 적 제거)"""
         if self.skill_available or self.skill_count >= SKILL_THRESHOLD:
+            # 스킬 사용 통계
+            self.statistics.on_skill_used()
+
             # 모든 돌 제거 (콤보 유지하면서)
             for stone in self.stones:
                 self.combo_system.add_hit(self.current_frame)
+                self.statistics.on_combo_update(self.combo_system.get_count())
+                self.statistics.on_stone_destroyed()
                 multiplier = self.combo_system.get_multiplier()
                 self.score += int(1 * multiplier)
 
             # 모든 적 제거 (적은 2배 점수)
             for enemy in self.enemies:
                 self.combo_system.add_hit(self.current_frame)
+                self.statistics.on_combo_update(self.combo_system.get_count())
+                self.statistics.on_enemy_destroyed()
                 multiplier = self.combo_system.get_multiplier()
                 self.score += int(2 * multiplier)
                 self.enemies_destroyed += 1
@@ -240,6 +327,9 @@ class GameState:
         Args:
             powerup_type: 파워업 타입
         """
+        # 아이템 수집 통계
+        self.statistics.on_item_collected()
+
         if powerup_type == PowerUpType.HEALTH:
             # 체력 회복 (최대치까지)
             self.health = min(self.health + 1, INITIAL_HEALTH)
@@ -330,7 +420,7 @@ def gameStart(api_client=None, difficulty_manager=None):
             return
 
         # 게임 상태 초기화
-        game_state = GameState(difficulty_manager)
+        game_state = GameState(difficulty_manager, api_client)
         player = Player(player_img)
 
         # 메인 게임 루프
@@ -367,6 +457,7 @@ def gameStart(api_client=None, difficulty_manager=None):
                                 game_state.missiles.append(missile_right)
 
                                 game_state.missiles_fired += 3
+                                game_state.statistics.on_missile_fired(3)
                             else:
                                 # 일반 발사
                                 missile_x = player.rect.x + PLAYER_WIDTH / 2 - MISSILE_WIDTH / 2
@@ -374,6 +465,7 @@ def gameStart(api_client=None, difficulty_manager=None):
                                 missile = Missile(missile_img, missile_x, missile_y)
                                 game_state.missiles.append(missile)
                                 game_state.missiles_fired += 1
+                                game_state.statistics.on_missile_fired(1)
 
                             try:
                                 missile_sound.play()
@@ -390,6 +482,12 @@ def gameStart(api_client=None, difficulty_manager=None):
                 game_state.combo_system.update(game_state.current_frame)
                 game_state.powerup_manager.update_effects()
                 game_state.update_powerup_effects()
+                game_state.stage_manager.update_notification()
+
+                # 스테이지 진행 체크
+                if game_state.stage_manager.check_advance(game_state.score):
+                    # 스테이지 진행 시 통계 업데이트
+                    game_state.statistics.on_stage_advanced(game_state.stage_manager.current_stage_number)
 
             # 플레이어 움직임 (속도 파워업 적용)
             if not game_state.game_over:
@@ -426,8 +524,13 @@ def gameStart(api_client=None, difficulty_manager=None):
             # 돌 생성
             if not game_state.game_over:
                 game_state.stone_spawn_timer += 1
-                if game_state.stone_spawn_timer >= game_state.stone_spawn_interval:
-                    stone = Stone(stone_img)
+                # 스테이지 배율 적용한 스폰 간격
+                adjusted_interval = int(game_state.stone_spawn_interval *
+                                       game_state.stage_manager.get_stone_spawn_multiplier())
+                if game_state.stone_spawn_timer >= adjusted_interval:
+                    # 스테이지 배율 적용한 운석 속도
+                    speed_multiplier = game_state.stage_manager.get_stone_speed_multiplier()
+                    stone = Stone(stone_img, speed_multiplier=speed_multiplier)
                     game_state.stones.append(stone)
                     game_state.stone_spawn_timer = 0
                     game_state.stone_spawn_interval = max(
@@ -435,9 +538,11 @@ def gameStart(api_client=None, difficulty_manager=None):
                         STONE_SPAWN_INTERVAL_MIN
                     )
 
-            # 적 생성 (확률적)
+            # 적 생성 (확률적, 스테이지 배율 적용)
             if not game_state.game_over:
-                if random.random() < enemy_spawn_chance / 60:  # 프레임당 확률 조정
+                # 스테이지 배율 적용
+                adjusted_spawn_chance = enemy_spawn_chance * game_state.stage_manager.get_enemy_spawn_multiplier()
+                if random.random() < adjusted_spawn_chance / 60:  # 프레임당 확률 조정
                     enemy = Enemy(enemy_img, enemy_speed, enemy_evasion_skill)
                     game_state.enemies.append(enemy)
 
@@ -563,6 +668,27 @@ def gameStart(api_client=None, difficulty_manager=None):
             score_rect = score_text.get_rect(center=(70, 60))
             gameScr.blit(score_text, score_rect)
 
+            # UI 그리기 - 스테이지
+            stage_text = font.render(f"Stage: {game_state.stage_manager.current_stage_number}", True, (100, 200, 255))
+            stage_rect = stage_text.get_rect(center=(SCREEN_WIDTH - 70, 60))
+            gameScr.blit(stage_text, stage_rect)
+
+            # 스테이지 진행 알림
+            if game_state.stage_manager.show_stage_notification:
+                stage_noti_font = load_font(Resources.MAIN_FONT, 56)
+                stage_noti_text = stage_noti_font.render(
+                    game_state.stage_manager.get_stage_info(),
+                    True,
+                    (255, 215, 0) if game_state.stage_manager.is_boss_stage() else (100, 200, 255)
+                )
+                stage_noti_rect = stage_noti_text.get_rect(center=(SCREEN_WIDTH // 2, SCREEN_HEIGHT // 2))
+                # 반투명 배경
+                overlay = pygame.Surface((SCREEN_WIDTH, 100))
+                overlay.set_alpha(150)
+                overlay.fill((0, 0, 0))
+                gameScr.blit(overlay, (0, SCREEN_HEIGHT // 2 - 50))
+                gameScr.blit(stage_noti_text, stage_noti_rect)
+
             # UI 그리기 - 스킬
             if game_state.skill_available:
                 gameScr.blit(skill_icon, [UI.SKILL_ICON_X, UI.SKILL_ICON_Y])
@@ -631,8 +757,18 @@ def gameStart(api_client=None, difficulty_manager=None):
                 # 게임 오버 화면 표시 및 점수 저장
                 pygame.display.flip()
                 pygame.time.wait(1000)  # 1초 대기
+
+                # 통계 및 업적 체크
                 max_combo = game_state.combo_system.get_max_combo()
-                show_game_over_screen(gameScr, font, game_state.score, background_img, api_client, max_combo)
+                achievements_unlocked = game_state.achievement_checker.check_achievements(
+                    game_state.statistics,
+                    game_state.score
+                )
+
+                show_game_over_screen(
+                    gameScr, font, game_state.score, background_img, api_client,
+                    max_combo, game_state.statistics, achievements_unlocked
+                )
                 running = False  # 메인 메뉴로 돌아가기
 
             pygame.display.flip()
