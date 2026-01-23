@@ -91,11 +91,11 @@ class AchievementChecker:
         """
         if self.api_client and self.api_client.is_logged_in():
             try:
-                # TODO: 서버 API 호출
-                # self.api_client.unlock_achievement(code)
-                pass
+                success, data, error = self.api_client.unlock_achievement(code)
+                if not success:
+                    print(f"업적 언락 실패: {error}")
             except Exception as e:
-                print(f"업적 언락 실패: {e}")
+                print(f"업적 언락 중 오류: {e}")
 
     def get_achievement_display_name(self, code: str) -> str:
         """

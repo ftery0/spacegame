@@ -387,6 +387,39 @@ class GameAPIClient:
         except requests.exceptions.RequestException as e:
             return False, None, f"네트워크 오류: {str(e)}"
 
+    def unlock_achievement(self, achievement_code: str) -> tuple[bool, Optional[Dict], Optional[str]]:
+        """
+        업적 언락
+
+        Args:
+            achievement_code: 업적 코드
+
+        Returns:
+            tuple: (성공 여부, 응답 데이터, 에러 메시지)
+        """
+        if not self.session_manager.is_logged_in():
+            return False, None, "로그인이 필요합니다"
+
+        try:
+            response = requests.post(
+                f"{self.base_url}/api/achievements/unlock",
+                json={"achievement_code": achievement_code, "progress": 100},
+                headers=self._get_headers(),
+                timeout=5
+            )
+
+            if response.status_code == 201:
+                logger.info(f"업적 언락 성공: {achievement_code}")
+                return True, response.json(), None
+            else:
+                error_msg = response.json().get("detail", "업적 언락 실패")
+                logger.warning(f"업적 언락 실패: {achievement_code} - {error_msg}")
+                return False, None, error_msg
+
+        except requests.exceptions.RequestException as e:
+            logger.error(f"업적 언락 네트워크 오류: {str(e)}")
+            return False, None, f"네트워크 오류: {str(e)}"
+
     def logout(self):
         """로그아웃 처리"""
         self.session_manager.logout()
