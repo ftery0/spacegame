@@ -105,11 +105,13 @@ class UI:
     """UI 요소 위치 및 크기"""
 
     # 시작 화면 버튼
-    START_BUTTON = {"x": 100, "y": 150, "width": 300, "height": 70}
-    RANKING_BUTTON = {"x": 100, "y": 250, "width": 140, "height": 60}
-    PROFILE_BUTTON = {"x": 260, "y": 250, "width": 140, "height": 60}
-    INFO_BUTTON = {"x": 100, "y": 340, "width": 300, "height": 60}
-    QUIT_BUTTON = {"x": 100, "y": 430, "width": 300, "height": 60}
+    START_BUTTON = {"x": 100, "y": 120, "width": 300, "height": 70}
+    RANKING_BUTTON = {"x": 100, "y": 210, "width": 140, "height": 60}
+    PROFILE_BUTTON = {"x": 260, "y": 210, "width": 140, "height": 60}
+    STATS_BUTTON = {"x": 100, "y": 290, "width": 140, "height": 60}
+    ACHIEVEMENT_BUTTON = {"x": 260, "y": 290, "width": 140, "height": 60}
+    INFO_BUTTON = {"x": 100, "y": 370, "width": 300, "height": 60}
+    QUIT_BUTTON = {"x": 100, "y": 450, "width": 300, "height": 60}
 
     # 게임 화면 버튼
     BACK_BUTTON = {"x": 10, "y": 750, "width": 150, "height": 50}

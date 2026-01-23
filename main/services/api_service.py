@@ -332,6 +332,61 @@ class GameAPIClient:
         except requests.exceptions.RequestException as e:
             return False, None, f"네트워크 오류: {str(e)}"
 
+    def get_my_stats_summary(self) -> tuple[bool, Optional[Dict], Optional[str]]:
+        """
+        내 통계 요약 조회
+
+        Returns:
+            tuple: (성공 여부, 통계 요약 데이터, 에러 메시지)
+        """
+        if not self.session_manager.is_logged_in():
+            return False, None, "로그인이 필요합니다"
+
+        try:
+            response = requests.get(
+                f"{self.base_url}/api/stats/summary",
+                headers=self._get_headers(),
+                timeout=5
+            )
+
+            if response.status_code == 200:
+                return True, response.json(), None
+            else:
+                error_msg = response.json().get("detail", "통계 요약 조회 실패")
+                return False, None, error_msg
+
+        except requests.exceptions.RequestException as e:
+            return False, None, f"네트워크 오류: {str(e)}"
+
+    def get_my_game_history(self, limit: int = 10) -> tuple[bool, Optional[List], Optional[str]]:
+        """
+        내 게임 기록 조회
+
+        Args:
+            limit: 조회할 게임 수
+
+        Returns:
+            tuple: (성공 여부, 게임 기록 리스트, 에러 메시지)
+        """
+        if not self.session_manager.is_logged_in():
+            return False, None, "로그인이 필요합니다"
+
+        try:
+            response = requests.get(
+                f"{self.base_url}/api/stats/my?limit={limit}",
+                headers=self._get_headers(),
+                timeout=5
+            )
+
+            if response.status_code == 200:
+                return True, response.json(), None
+            else:
+                error_msg = response.json().get("detail", "게임 기록 조회 실패")
+                return False, None, error_msg
+
+        except requests.exceptions.RequestException as e:
+            return False, None, f"네트워크 오류: {str(e)}"
+
     def logout(self):
         """로그아웃 처리"""
         self.session_manager.logout()

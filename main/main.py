@@ -10,6 +10,8 @@ from screens.auth_screen import show_auth_screen
 from screens.ranking_screen import show_ranking_screen
 from screens.profile_screen import show_profile_screen
 from screens.difficulty_screen import show_difficulty_screen
+from screens.stats_screen import show_stats_screen
+from screens.achievement_screen import show_achievement_screen
 from screens import game_screen as gameview
 from game.difficulty import DifficultyManager
 
@@ -56,6 +58,8 @@ def startView():
         startBtnObj = create_button_rect(UI.START_BUTTON)
         rankingBtn = create_button_rect(UI.RANKING_BUTTON)
         profileBtn = create_button_rect(UI.PROFILE_BUTTON)
+        statsBtn = create_button_rect(UI.STATS_BUTTON)
+        achievementBtn = create_button_rect(UI.ACHIEVEMENT_BUTTON)
         startinfom = create_button_rect(UI.INFO_BUTTON)
         stopbt = create_button_rect(UI.QUIT_BUTTON)
 
@@ -124,6 +128,26 @@ def startView():
                         except pygame.error:
                             pass
 
+                    elif statsBtn.collidepoint(event.pos):
+                        # 통계 화면
+                        pygame.mixer.music.stop()
+                        show_stats_screen(api_client)
+                        try:
+                            load_music(Resources.BACKGROUND_MUSIC)
+                            pygame.mixer.music.play(-1)
+                        except pygame.error:
+                            pass
+
+                    elif achievementBtn.collidepoint(event.pos):
+                        # 업적 화면
+                        pygame.mixer.music.stop()
+                        show_achievement_screen(api_client)
+                        try:
+                            load_music(Resources.BACKGROUND_MUSIC)
+                            pygame.mixer.music.play(-1)
+                        except pygame.error:
+                            pass
+
                     elif startinfom.collidepoint(event.pos):
                         pygame.mixer.music.stop()
                         gameview.gameinform()
@@ -157,6 +181,16 @@ def startView():
             profileText = font_small.render("👤 프로필", True, RED if profileBtn.collidepoint(mouse_pos) else WHITE)
             profileTextRect = profileText.get_rect(center=(profileBtn.x + profileBtn.width // 2, profileBtn.y + profileBtn.height // 2))
             startScr.blit(profileText, profileTextRect)
+
+            # 통계 버튼
+            statsText = font_small.render("📊 통계", True, RED if statsBtn.collidepoint(mouse_pos) else WHITE)
+            statsTextRect = statsText.get_rect(center=(statsBtn.x + statsBtn.width // 2, statsBtn.y + statsBtn.height // 2))
+            startScr.blit(statsText, statsTextRect)
+
+            # 업적 버튼
+            achievementText = font_small.render("🏅 업적", True, RED if achievementBtn.collidepoint(mouse_pos) else WHITE)
+            achievementTextRect = achievementText.get_rect(center=(achievementBtn.x + achievementBtn.width // 2, achievementBtn.y + achievementBtn.height // 2))
+            startScr.blit(achievementText, achievementTextRect)
 
             # 정보 버튼
             startinfomtext = font.render("정보", True, RED if startinfom.collidepoint(mouse_pos) else WHITE)
