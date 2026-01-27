@@ -67,7 +67,7 @@ class Player:
 class Stone:
     """운석 엔티티"""
 
-    def __init__(self, image: pygame.Surface, x: int = None, y: int = 0):
+    def __init__(self, image: pygame.Surface, x: int = None, y: int = 0, speed_multiplier: float = 1.0):
         """
         운석 초기화
 
@@ -75,13 +75,14 @@ class Stone:
             image: 운석 이미지
             x: X 위치 (기본값: 무작위)
             y: Y 위치 (기본값: 0)
+            speed_multiplier: 속도 배율 (스테이지별 난이도)
         """
         self.size = random.randint(STONE_MIN_SIZE, STONE_MAX_SIZE)
         self.image = pygame.transform.scale(image, (self.size, self.size))
         self.rect = self.image.get_rect()
         self.rect.x = x if x is not None else random.randint(0, SCREEN_WIDTH - self.size)
         self.rect.y = y
-        self.speed = STONE_SPEED
+        self.speed = STONE_SPEED * speed_multiplier
 
     def update(self):
         """운석 업데이트"""

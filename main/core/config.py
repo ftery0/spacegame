@@ -43,6 +43,25 @@ MISSILE_WIDTH = 10
 MISSILE_HEIGHT = 30
 MISSILE_SPEED = 5
 
+
+# 적 설정 (기본값, 난이도에 따라 조정됨)
+ENEMY_WIDTH = 50
+ENEMY_HEIGHT = 50
+ENEMY_SPEED = 2.5
+ENEMY_SPAWN_CHANCE = 0.2  # 기본 생성 확률
+ENEMY_EVASION_SKILL = 0.8  # 기본 회피 능력
+ENEMY_ATTACK_RATE = 90  # 기본 공격 주기 (프레임)
+ENEMY_PROJECTILE_SPEED = 3.0
+
+# 적 레이저 설정
+ENEMY_LASER_CHARGE_TIME = 300  # 5초 충전 (60 FPS 기준)
+ENEMY_LASER_FIRE_TIME = 60  # 1초 발사
+ENEMY_LASER_COOLDOWN_TIME = 60  # 1초 쿨다운
+ENEMY_LASER_WIDTH = 8  # 레이저 빔 두께
+ENEMY_LASER_COLOR = (255, 50, 50)  # 빨간색 레이저
+ENEMY_LASER_CHARGE_COLOR = (255, 200, 50)  # 노란색 충전 이펙트
+
+
 # 게임 플레이 설정
 INITIAL_HEALTH = 3
 SKILL_THRESHOLD = 10
@@ -60,10 +79,16 @@ class Resources:
     HEART_FULL = os.path.join(TEXTURE_DIR, "heart.png")
     HEART_EMPTY = os.path.join(TEXTURE_DIR, "heart2.png")
     SKILL_ICON = os.path.join(TEXTURE_DIR, "skill.png")
+    ENEMY = os.path.join(TEXTURE_DIR, "rock1.png")  # TODO: 전용 적 이미지 추가
+    ENEMY_PROJECTILE = os.path.join(TEXTURE_DIR, "mix.png")  # TODO: 전용 발사체 이미지 추가
 
     # 사운드
     BACKGROUND_MUSIC = os.path.join(TEXTURE_DIR, "backsound.mp3")
     MISSILE_SOUND = os.path.join(TEXTURE_DIR, "laser2.mp3")
+
+    # 적 레이저 사운드 (나중에 사용자가 제공)
+    ENEMY_LASER_CHARGE_SOUND = os.path.join(PROJECT_ROOT, "sounds", "enemy_laser_charge.mp3")  # TODO: 충전 사운드 추가 필요
+    ENEMY_LASER_FIRE_SOUND = os.path.join(PROJECT_ROOT, "sounds", "enemy_laser_fire.mp3")  # TODO: 발사 사운드 추가 필요
 
     # 폰트
     MAIN_FONT = os.path.join(FONT_DIR, "BMDOHYEON_ttf.ttf")
@@ -94,11 +119,13 @@ class UI:
     """UI 요소 위치 및 크기"""
 
     # 시작 화면 버튼
-    START_BUTTON = {"x": 100, "y": 150, "width": 300, "height": 70}
-    RANKING_BUTTON = {"x": 100, "y": 250, "width": 140, "height": 60}
-    PROFILE_BUTTON = {"x": 260, "y": 250, "width": 140, "height": 60}
-    INFO_BUTTON = {"x": 100, "y": 340, "width": 300, "height": 60}
-    QUIT_BUTTON = {"x": 100, "y": 430, "width": 300, "height": 60}
+    START_BUTTON = {"x": 100, "y": 120, "width": 300, "height": 70}
+    RANKING_BUTTON = {"x": 100, "y": 210, "width": 140, "height": 60}
+    PROFILE_BUTTON = {"x": 260, "y": 210, "width": 140, "height": 60}
+    STATS_BUTTON = {"x": 100, "y": 290, "width": 140, "height": 60}
+    ACHIEVEMENT_BUTTON = {"x": 260, "y": 290, "width": 140, "height": 60}
+    INFO_BUTTON = {"x": 100, "y": 370, "width": 300, "height": 60}
+    QUIT_BUTTON = {"x": 100, "y": 450, "width": 300, "height": 60}
 
     # 게임 화면 버튼
     BACK_BUTTON = {"x": 10, "y": 750, "width": 150, "height": 50}

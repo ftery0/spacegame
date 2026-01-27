@@ -9,7 +9,11 @@ from services.api_service import GameAPIClient
 from screens.auth_screen import show_auth_screen
 from screens.ranking_screen import show_ranking_screen
 from screens.profile_screen import show_profile_screen
+from screens.difficulty_screen import show_difficulty_screen
+from screens.stats_screen import show_stats_screen
+from screens.achievement_screen import show_achievement_screen
 from screens import game_screen as gameview
+from game.difficulty import DifficultyManager
 
 # 로깅 설정
 setup_logging(log_level="INFO")
@@ -32,6 +36,20 @@ def startView():
         # API 클라이언트 초기화
         api_client = GameAPIClient()
 
+        # 난이도 관리자 초기화
+        difficulty_manager = DifficultyManager()
+
+        # 서버에서 난이도 설정 가져오기
+        try:
+            success, difficulties, error = api_client.get_difficulties()
+            if success and difficulties:
+                difficulty_manager.update_from_api(difficulties)
+                logger.info(f"난이도 설정 {len(difficulties)}개 로드 완료")
+            else:
+                logger.warning(f"난이도 설정 로드 실패, 기본값 사용: {error}")
+        except Exception as e:
+            logger.error(f"난이도 설정 로드 중 오류: {str(e)}")
+
         # 화면 설정
         startScr = pygame.display.set_mode([SCREEN_WIDTH, SCREEN_HEIGHT])
         pygame.display.set_caption('원석 부수기')
@@ -40,6 +58,8 @@ def startView():
         startBtnObj = create_button_rect(UI.START_BUTTON)
         rankingBtn = create_button_rect(UI.RANKING_BUTTON)
         profileBtn = create_button_rect(UI.PROFILE_BUTTON)
+        statsBtn = create_button_rect(UI.STATS_BUTTON)
+        achievementBtn = create_button_rect(UI.ACHIEVEMENT_BUTTON)
         startinfom = create_button_rect(UI.INFO_BUTTON)
         stopbt = create_button_rect(UI.QUIT_BUTTON)
 
@@ -68,8 +88,9 @@ def startView():
                             pygame.mixer.music.stop()
                             logged_in = show_auth_screen(startScr, backGImg, api_client)
                             if logged_in:
-                                # 로그인 성공 후 게임 시작
-                                gameview.gameStart(api_client)
+                                # 로그인 성공 후 난이도 선택 -> 게임 시작
+                                show_difficulty_screen(startScr, backGImg, difficulty_manager)
+                                gameview.gameStart(api_client, difficulty_manager)
                             # 음악 재시작
                             try:
                                 load_music(Resources.BACKGROUND_MUSIC)
@@ -77,9 +98,10 @@ def startView():
                             except pygame.error:
                                 pass
                         else:
-                            # 이미 로그인된 경우 바로 게임 시작
+                            # 이미 로그인된 경우 난이도 선택 -> 게임 시작
                             pygame.mixer.music.stop()
-                            gameview.gameStart(api_client)
+                            show_difficulty_screen(startScr, backGImg, difficulty_manager)
+                            gameview.gameStart(api_client, difficulty_manager)
                             try:
                                 load_music(Resources.BACKGROUND_MUSIC)
                                 pygame.mixer.music.play(-1)
@@ -100,6 +122,26 @@ def startView():
                         # 프로필 화면
                         pygame.mixer.music.stop()
                         show_profile_screen(startScr, backGImg, api_client)
+                        try:
+                            load_music(Resources.BACKGROUND_MUSIC)
+                            pygame.mixer.music.play(-1)
+                        except pygame.error:
+                            pass
+
+                    elif statsBtn.collidepoint(event.pos):
+                        # 통계 화면
+                        pygame.mixer.music.stop()
+                        show_stats_screen(api_client)
+                        try:
+                            load_music(Resources.BACKGROUND_MUSIC)
+                            pygame.mixer.music.play(-1)
+                        except pygame.error:
+                            pass
+
+                    elif achievementBtn.collidepoint(event.pos):
+                        # 업적 화면
+                        pygame.mixer.music.stop()
+                        show_achievement_screen(api_client)
                         try:
                             load_music(Resources.BACKGROUND_MUSIC)
                             pygame.mixer.music.play(-1)
@@ -139,6 +181,16 @@ def startView():
             profileText = font_small.render("👤 프로필", True, RED if profileBtn.collidepoint(mouse_pos) else WHITE)
             profileTextRect = profileText.get_rect(center=(profileBtn.x + profileBtn.width // 2, profileBtn.y + profileBtn.height // 2))
             startScr.blit(profileText, profileTextRect)
+
+            # 통계 버튼
+            statsText = font_small.render("📊 통계", True, RED if statsBtn.collidepoint(mouse_pos) else WHITE)
+            statsTextRect = statsText.get_rect(center=(statsBtn.x + statsBtn.width // 2, statsBtn.y + statsBtn.height // 2))
+            startScr.blit(statsText, statsTextRect)
+
+            # 업적 버튼
+            achievementText = font_small.render("🏅 업적", True, RED if achievementBtn.collidepoint(mouse_pos) else WHITE)
+            achievementTextRect = achievementText.get_rect(center=(achievementBtn.x + achievementBtn.width // 2, achievementBtn.y + achievementBtn.height // 2))
+            startScr.blit(achievementText, achievementTextRect)
 
             # 정보 버튼
             startinfomtext = font.render("정보", True, RED if startinfom.collidepoint(mouse_pos) else WHITE)

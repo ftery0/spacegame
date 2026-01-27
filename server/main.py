@@ -10,7 +10,7 @@ import uvicorn
 from database import init_db
 from core.config import settings
 from core.logging_config import setup_logging
-from routers import auth, scores
+from routers import auth, scores, game_stats, achievements, difficulties
 
 # 로깅 설정
 setup_logging(log_level=getattr(settings, "LOG_LEVEL", "INFO"))
@@ -45,6 +45,9 @@ app.add_middleware(
 # 라우터 등록
 app.include_router(auth.router)
 app.include_router(scores.router)
+app.include_router(game_stats.router)
+app.include_router(achievements.router)
+app.include_router(difficulties.router)
 
 
 @app.on_event("startup")
