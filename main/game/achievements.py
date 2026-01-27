@@ -16,6 +16,7 @@ class AchievementChecker:
         self.api_client = api_client
         self.unlocked_this_game = []
         self.notification_queue = []
+        self.checked_achievements = set()  # 이미 체크한 업적 (중복 방지)
 
     def check_achievements(self, stats: GameStatistics, final_score: int) -> List[str]:
         """
@@ -171,7 +172,35 @@ class AchievementChecker:
             return self.notification_queue.pop(0)
         return None
 
+    def check_realtime_achievements(self, stats: GameStatistics, current_score: int):
+        """
+        게임 중 실시간 업적 체크
+
+        Args:
+            stats: 게임 통계
+            current_score: 현재 점수
+        """
+        achievements = []
+
+        # 콤보 마스터 (100 콤보 달성)
+        if stats.max_combo >= 100 and 'combo_master' not in self.checked_achievements:
+            achievements.append('combo_master')
+            self.checked_achievements.add('combo_master')
+
+        # 스테이지 마스터 (스테이지 10 도달)
+        if stats.max_stage >= 10 and 'stage_master' not in self.checked_achievements:
+            achievements.append('stage_master')
+            self.checked_achievements.add('stage_master')
+
+        # 업적 달성 시 서버에 전송 및 알림 큐에 추가
+        for achievement_code in achievements:
+            if achievement_code not in self.unlocked_this_game:
+                self._unlock_achievement(achievement_code)
+                self.unlocked_this_game.append(achievement_code)
+                self.notification_queue.append(achievement_code)
+
     def reset(self):
         """체커 리셋"""
         self.unlocked_this_game.clear()
         self.notification_queue.clear()
+        self.checked_achievements.clear()
