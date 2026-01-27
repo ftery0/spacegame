@@ -52,6 +52,14 @@ ENEMY_EVASION_SKILL = 0.8  # 기본 회피 능력
 ENEMY_ATTACK_RATE = 90  # 기본 공격 주기 (프레임)
 ENEMY_PROJECTILE_SPEED = 3.0
 
+# 적 레이저 설정
+ENEMY_LASER_CHARGE_TIME = 300  # 5초 충전 (60 FPS 기준)
+ENEMY_LASER_FIRE_TIME = 60  # 1초 발사
+ENEMY_LASER_COOLDOWN_TIME = 60  # 1초 쿨다운
+ENEMY_LASER_WIDTH = 8  # 레이저 빔 두께
+ENEMY_LASER_COLOR = (255, 50, 50)  # 빨간색 레이저
+ENEMY_LASER_CHARGE_COLOR = (255, 200, 50)  # 노란색 충전 이펙트
+
 # 게임 플레이 설정
 INITIAL_HEALTH = 3
 SKILL_THRESHOLD = 10
@@ -75,6 +83,10 @@ class Resources:
     # 사운드
     BACKGROUND_MUSIC = os.path.join(TEXTURE_DIR, "backsound.mp3")
     MISSILE_SOUND = os.path.join(TEXTURE_DIR, "laser2.mp3")
+
+    # 적 레이저 사운드 (나중에 사용자가 제공)
+    ENEMY_LASER_CHARGE_SOUND = os.path.join(PROJECT_ROOT, "sounds", "enemy_laser_charge.mp3")  # TODO: 충전 사운드 추가 필요
+    ENEMY_LASER_FIRE_SOUND = os.path.join(PROJECT_ROOT, "sounds", "enemy_laser_fire.mp3")  # TODO: 발사 사운드 추가 필요
 
     # 폰트
     MAIN_FONT = os.path.join(FONT_DIR, "BMDOHYEON_ttf.ttf")

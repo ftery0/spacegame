@@ -219,6 +219,30 @@ class CollisionDetector:
         return collisions
 
     @staticmethod
+    def check_player_enemy_laser_collision(player, enemies: List) -> List[int]:
+        """
+        플레이어와 적 레이저의 충돌 확인
+
+        Args:
+            player: 플레이어
+            enemies: 적 리스트
+
+        Returns:
+            List[int]: 레이저를 발사 중인 적의 인덱스 리스트 (충돌한 경우)
+        """
+        collisions = []
+        player_rect = player.get_rect()
+
+        for enemy_idx, enemy in enumerate(enemies):
+            laser = enemy.get_laser()
+            if laser and laser.is_active():
+                # 레이저와 플레이어 충돌 확인
+                if laser.collides_with(player_rect):
+                    collisions.append(enemy_idx)
+
+        return collisions
+
+    @staticmethod
     def check_all_collisions(
         player,
         missiles: List,
@@ -248,6 +272,7 @@ class CollisionDetector:
                     'missile_enemy': [(미사일_idx, 적_idx), ...],
                     'player_enemy': [적_idx, ...],
                     'player_enemy_projectile': [발사체_idx, ...],
+                    'player_enemy_laser': [적_idx, ...],
                     'enemy_out': [적_idx, ...],
                     'enemy_projectile_out': [발사체_idx, ...],
                     'player_powerup': [파워업_idx, ...]
@@ -265,6 +290,7 @@ class CollisionDetector:
             'missile_enemy': CollisionDetector.check_missile_enemy_collision(missiles, enemies),
             'player_enemy': CollisionDetector.check_player_enemy_collision(player, enemies),
             'player_enemy_projectile': CollisionDetector.check_player_enemy_projectile_collision(player, enemy_projectiles),
+            'player_enemy_laser': CollisionDetector.check_player_enemy_laser_collision(player, enemies),
             'enemy_out': CollisionDetector.check_enemy_out_of_bounds(enemies),
             'enemy_projectile_out': CollisionDetector.check_enemy_projectile_out_of_bounds(enemy_projectiles),
             'player_powerup': CollisionDetector.check_player_powerup_collision(player, powerups)
