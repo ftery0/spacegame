@@ -18,11 +18,12 @@ from game.entities import Player, Stone, Missile
 from game.collision import CollisionDetector
 from game.combo import ComboSystem
 from game.difficulty import DifficultyManager
-from game.enemy import Enemy, EnemyProjectile
+from game.enemy import Enemy, EnemyProjectile, EnemyState
 from game.powerup import PowerUp, PowerUpType, PowerUpManager
 from game.stage import StageManager
 from game.statistics import GameStatistics
 from game.achievements import AchievementChecker
+from game.achievement_notification import AchievementNotificationManager
 
 logger = logging.getLogger(__name__)
 
@@ -142,22 +143,67 @@ def show_game_over_screen(screen, font, score, background_img, api_client, max_c
             screen.blit(combo_display, combo_rect)
             y_offset += 35
 
-        # 업적 표시
+        # 업적 표시 (강화된 버전)
         if achievements_unlocked and len(achievements_unlocked) > 0:
-            achievement_font = load_font(Resources.MAIN_FONT, 20)
+            y_offset += 10
+            achievement_font = load_font(Resources.MAIN_FONT, 24)
+            small_ach_font = load_font(Resources.MAIN_FONT, 18)
+
+            # 업적 박스 배경
+            box_width = 420
+            box_height = 60 + len(achievements_unlocked[:4]) * 45
+            box_x = (SCREEN_WIDTH - box_width) // 2
+            box_y = y_offset - 10
+
+            # 반투명 박스
+            achievement_box = pygame.Surface((box_width, box_height))
+            achievement_box.set_alpha(200)
+            achievement_box.fill((30, 30, 50))
+            screen.blit(achievement_box, (box_x, box_y))
+
+            # 테두리 (골드)
+            pygame.draw.rect(screen, (255, 215, 0), (box_x, box_y, box_width, box_height), 3)
+
+            # 제목
             achievement_title = achievement_font.render("🏆 업적 달성!", True, (255, 215, 0))
-            achievement_title_rect = achievement_title.get_rect(center=(SCREEN_WIDTH // 2, y_offset))
+            achievement_title_rect = achievement_title.get_rect(center=(SCREEN_WIDTH // 2, y_offset + 15))
             screen.blit(achievement_title, achievement_title_rect)
-            y_offset += 30
+            y_offset += 45
 
             from game.achievements import AchievementChecker
             checker = AchievementChecker()
-            for achievement_code in achievements_unlocked[:3]:  # 최대 3개만 표시
+
+            for achievement_code in achievements_unlocked[:4]:  # 최대 4개 표시
+                # 업적 아이콘 (골드 원)
+                icon_x = box_x + 30
+                icon_y = y_offset
+                pygame.draw.circle(screen, (255, 215, 0), (icon_x, icon_y), 12)
+
+                # 체크 마크
+                check_font = load_font(Resources.MAIN_FONT, 16)
+                check_text = check_font.render("✓", True, (0, 0, 0))
+                check_rect = check_text.get_rect(center=(icon_x, icon_y))
+                screen.blit(check_text, check_rect)
+
+                # 업적 이름 및 설명
                 ach_name = checker.get_achievement_display_name(achievement_code)
-                ach_text = achievement_font.render(f"• {ach_name}", True, (200, 200, 255))
-                ach_rect = ach_text.get_rect(center=(SCREEN_WIDTH // 2, y_offset))
-                screen.blit(ach_text, ach_rect)
-                y_offset += 25
+                ach_desc = checker.get_achievement_description(achievement_code)
+
+                name_text = achievement_font.render(ach_name, True, (255, 215, 0))
+                screen.blit(name_text, (icon_x + 25, y_offset - 15))
+
+                desc_text = small_ach_font.render(ach_desc[:45] + "..." if len(ach_desc) > 45 else ach_desc, True, (180, 180, 180))
+                screen.blit(desc_text, (icon_x + 25, y_offset + 8))
+
+                y_offset += 45
+
+            # 더 많은 업적이 있으면 표시
+            if len(achievements_unlocked) > 4:
+                more_text = small_ach_font.render(f"... 외 {len(achievements_unlocked) - 4}개", True, (150, 150, 150))
+                more_rect = more_text.get_rect(center=(SCREEN_WIDTH // 2, y_offset - 10))
+                screen.blit(more_text, more_rect)
+
+            y_offset += 15
 
         # 사용자 이름 표시 (로그인된 경우)
         y_offset += 10
@@ -207,8 +253,12 @@ class GameState:
         # 새로운 시스템들
         self.stage_manager = StageManager()
         difficulty_name = difficulty_manager.current_difficulty if difficulty_manager else "medium"
+
+        # 레이저 피해 쿨다운 (연속 피해 방지)
+        self.laser_damage_cooldown = 0  # 프레임 단위
         self.statistics = GameStatistics(difficulty=difficulty_name)
         self.achievement_checker = AchievementChecker(api_client)
+        self.achievement_notification_manager = AchievementNotificationManager(self.achievement_checker)
 
         # 적 관련 통계 (하위 호환성 유지)
         self.enemies_destroyed = 0
@@ -225,6 +275,7 @@ class GameState:
         self.health = INITIAL_HEALTH
         self.game_over = False
         self.skill_count = 0
+        self.laser_damage_cooldown = 0
         self.skill_available = False
         self.stones.clear()
         self.missiles.clear()
@@ -414,6 +465,18 @@ def gameStart(api_client=None, difficulty_manager=None):
             load_music(Resources.BACKGROUND_MUSIC)
             pygame.mixer.music.play(-1)
 
+            # 적 레이저 사운드 (선택적 로드 - 파일이 없어도 계속 진행)
+            enemy_laser_charge_sound = None
+            enemy_laser_fire_sound = None
+            try:
+                import os
+                if os.path.exists(Resources.ENEMY_LASER_CHARGE_SOUND):
+                    enemy_laser_charge_sound = load_sound(Resources.ENEMY_LASER_CHARGE_SOUND)
+                if os.path.exists(Resources.ENEMY_LASER_FIRE_SOUND):
+                    enemy_laser_fire_sound = load_sound(Resources.ENEMY_LASER_FIRE_SOUND)
+            except Exception as e:
+                logger.warning(f"적 레이저 사운드 로드 실패 (선택사항): {e}")
+
             font = load_font(Resources.MAIN_FONT, UI.FONT_SIZE_MEDIUM)
         except (FileNotFoundError, pygame.error) as e:
             show_error_dialog("게임 리소스 로드 오류", str(e))
@@ -422,6 +485,9 @@ def gameStart(api_client=None, difficulty_manager=None):
         # 게임 상태 초기화
         game_state = GameState(difficulty_manager, api_client)
         player = Player(player_img)
+
+        # 적 상태 추적 (사운드 재생용)
+        enemy_states = {}  # {enemy_id: previous_state}
 
         # 메인 게임 루프
         running = True
@@ -556,19 +622,34 @@ def gameStart(api_client=None, difficulty_manager=None):
                 stone.update()
                 stone.draw(gameScr)
 
-            # 적 업데이트, 공격, 그리기
+            # 적 업데이트 및 그리기 (레이저 시스템)
             for enemy in game_state.enemies:
-                # 적 업데이트 (미사일 리스트 전달하여 회피 로직 실행)
-                enemy.update(game_state.missiles)
+                enemy_id = id(enemy)  # 적의 고유 ID
+                prev_state = enemy_states.get(enemy_id, None)
 
-                # 적 공격
-                if enemy.can_shoot(enemy_attack_rate):
-                    proj_x, proj_y = enemy.get_shoot_position()
-                    projectile = EnemyProjectile(enemy_proj_img, proj_x, proj_y, ENEMY_PROJECTILE_SPEED)
-                    game_state.enemy_projectiles.append(projectile)
+                # 적 업데이트 (플레이어, 미사일, 운석 전달하여 AI 로직 실행)
+                enemy.update(player, game_state.missiles, game_state.stones)
 
-                # 적 그리기
+                # 상태 변경 감지 및 사운드 재생
+                current_state = enemy.state
+                if prev_state != current_state:
+                    # 충전 시작 시 충전 사운드 재생
+                    if current_state == EnemyState.CHARGING and enemy_laser_charge_sound:
+                        enemy_laser_charge_sound.play()
+
+                    # 발사 시작 시 발사 사운드 재생
+                    elif current_state == EnemyState.FIRING and enemy_laser_fire_sound:
+                        enemy_laser_fire_sound.play()
+
+                    # 상태 업데이트
+                    enemy_states[enemy_id] = current_state
+
+                # 적 그리기 (레이저 포함)
                 enemy.draw(gameScr)
+
+            # 화면 밖으로 나간 적의 상태 추적 정리
+            current_enemy_ids = {id(enemy) for enemy in game_state.enemies}
+            enemy_states = {eid: state for eid, state in enemy_states.items() if eid in current_enemy_ids}
 
             # 적 발사체 업데이트 및 그리기
             for projectile in game_state.enemy_projectiles:
@@ -609,11 +690,24 @@ def gameStart(api_client=None, difficulty_manager=None):
                 game_state.take_damage()
                 del game_state.enemy_projectiles[proj_idx]
 
+            # 플레이어-적 레이저 충돌 처리 (쿨다운 적용)
+            unique_player_lasers = set(collisions['player_enemy_laser'])
+            if unique_player_lasers and not game_state.powerup_manager.has_active_powerup(PowerUpType.SHIELD):
+                # 레이저에 맞으면 피해 (무적 상태가 아닌 경우)
+                # 쿨다운이 끝났을 때만 피해 적용 (30 프레임 = 0.5초)
+                if game_state.laser_damage_cooldown <= 0:
+                    game_state.take_damage()
+                    game_state.laser_damage_cooldown = 30  # 0.5초 쿨다운
+
+            # 레이저 피해 쿨다운 감소
+            if game_state.laser_damage_cooldown > 0:
+                game_state.laser_damage_cooldown -= 1
+
             # 플레이어-파워업 충돌 처리
             unique_player_powerups = sorted(set(collisions['player_powerup']), reverse=True)
             for powerup_idx in unique_player_powerups:
                 powerup = game_state.powerup_manager.get_active_powerups()[powerup_idx]
-                game_state.apply_powerup(powerup.type)
+                game_state.apply_powerup(powerup.type)  # 내부에서 통계 업데이트
                 del game_state.powerup_manager.active_powerups[powerup_idx]
 
             # 미사일-운석 충돌 처리
@@ -746,6 +840,23 @@ def gameStart(api_client=None, difficulty_manager=None):
             # 무적 상태 표시 (화면 테두리)
             if game_state.is_invincible:
                 pygame.draw.rect(gameScr, (100, 200, 255), (0, 0, SCREEN_WIDTH, SCREEN_HEIGHT), 5)
+
+            # 실시간 업적 체크 (게임 중)
+            if not game_state.game_over:
+                game_state.achievement_checker.check_realtime_achievements(
+                    game_state.statistics,
+                    game_state.score
+                )
+
+            # 업적 알림 업데이트 및 그리기
+            game_state.achievement_notification_manager.update()
+            game_state.achievement_notification_manager.draw(gameScr, Resources.MAIN_FONT)
+
+            # 업적 체커에서 대기 중인 알림 확인 및 추가
+            while game_state.achievement_checker.has_notifications():
+                achievement_code = game_state.achievement_checker.pop_notification()
+                if achievement_code:
+                    game_state.achievement_notification_manager.add_achievement(achievement_code)
 
             # UI 그리기 - BACK 버튼
             mouse_pos = pygame.mouse.get_pos()
