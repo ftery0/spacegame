@@ -43,6 +43,7 @@ MISSILE_WIDTH = 10
 MISSILE_HEIGHT = 30
 MISSILE_SPEED = 5
 
+
 # 적 설정 (기본값, 난이도에 따라 조정됨)
 ENEMY_WIDTH = 50
 ENEMY_HEIGHT = 50
@@ -59,6 +60,7 @@ ENEMY_LASER_COOLDOWN_TIME = 60  # 1초 쿨다운
 ENEMY_LASER_WIDTH = 8  # 레이저 빔 두께
 ENEMY_LASER_COLOR = (255, 50, 50)  # 빨간색 레이저
 ENEMY_LASER_CHARGE_COLOR = (255, 200, 50)  # 노란색 충전 이펙트
+
 
 # 게임 플레이 설정
 INITIAL_HEALTH = 3
