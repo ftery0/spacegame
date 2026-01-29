@@ -1,4 +1,5 @@
 """인증 관련 API 라우트"""
+import logging
 from fastapi import APIRouter, Depends, HTTPException, status, Request
 from slowapi import Limiter
 from slowapi.util import get_remote_address
@@ -11,6 +12,7 @@ from schemas.common import Token
 from services.auth_service import AuthService
 from core.security import decode_token
 
+logger = logging.getLogger(__name__)
 router = APIRouter(prefix="/api/auth", tags=["인증"])
 limiter = Limiter(key_func=get_remote_address)
 
@@ -83,24 +85,34 @@ async def register(
     - **username**: 사용자 이름 (3-20자, 고유해야 함)
     - **password**: 비밀번호 (4자 이상)
     """
-    auth_service = AuthService(db)
+    try:
+        auth_service = AuthService(db)
 
-    success, user, error = auth_service.register_user(user_data.username, user_data.password)
+        success, user, error = auth_service.register_user(user_data.username, user_data.password)
 
-    if not success:
+        if not success:
+            logger.warning(f"회원가입 실패: {error}")
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail=error
+            )
+
+        # 토큰 생성
+        access_token = auth_service.create_access_token_for_user(user)
+
+        return {
+            "access_token": access_token,
+            "token_type": "bearer",
+            "user": user
+        }
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"회원가입 API 오류: {str(e)}", exc_info=True)
         raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST,
-            detail=error
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail="서버 오류가 발생했습니다. 잠시 후 다시 시도해주세요."
         )
-
-    # 토큰 생성
-    access_token = auth_service.create_access_token_for_user(user)
-
-    return {
-        "access_token": access_token,
-        "token_type": "bearer",
-        "user": user
-    }
 
 
 @router.post("/login", response_model=Token)
@@ -116,25 +128,35 @@ async def login(
     - **username**: 사용자 이름
     - **password**: 비밀번호
     """
-    auth_service = AuthService(db)
+    try:
+        auth_service = AuthService(db)
 
-    success, user, error = auth_service.login_user(login_data.username, login_data.password)
+        success, user, error = auth_service.login_user(login_data.username, login_data.password)
 
-    if not success:
+        if not success:
+            logger.warning(f"로그인 실패: {error}")
+            raise HTTPException(
+                status_code=status.HTTP_401_UNAUTHORIZED,
+                detail=error,
+                headers={"WWW-Authenticate": "Bearer"},
+            )
+
+        # 토큰 생성
+        access_token = auth_service.create_access_token_for_user(user)
+
+        return {
+            "access_token": access_token,
+            "token_type": "bearer",
+            "user": user
+        }
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"로그인 API 오류: {str(e)}", exc_info=True)
         raise HTTPException(
-            status_code=status.HTTP_401_UNAUTHORIZED,
-            detail=error,
-            headers={"WWW-Authenticate": "Bearer"},
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail="서버 오류가 발생했습니다. 잠시 후 다시 시도해주세요."
         )
-
-    # 토큰 생성
-    access_token = auth_service.create_access_token_for_user(user)
-
-    return {
-        "access_token": access_token,
-        "token_type": "bearer",
-        "user": user
-    }
 
 
 @router.get("/me", response_model=UserResponse)
