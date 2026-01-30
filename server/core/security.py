@@ -3,14 +3,11 @@ import logging
 from datetime import datetime, timedelta
 from typing import Optional
 from jose import JWTError, jwt
-from passlib.context import CryptContext
+import bcrypt
 
 from .config import settings
 
 logger = logging.getLogger(__name__)
-
-# 비밀번호 해싱 설정
-pwd_context = CryptContext(schemes=["bcrypt"], deprecated="auto")
 
 # bcrypt는 최대 72바이트까지만 지원
 MAX_PASSWORD_BYTES = 72
@@ -32,9 +29,9 @@ def verify_password(plain_password: str, hashed_password: str) -> bool:
         password_bytes = plain_password.encode('utf-8')
         if len(password_bytes) > MAX_PASSWORD_BYTES:
             logger.warning(f"비밀번호가 {MAX_PASSWORD_BYTES}바이트를 초과하여 자릅니다.")
-            plain_password = password_bytes[:MAX_PASSWORD_BYTES].decode('utf-8', errors='ignore')
+            password_bytes = password_bytes[:MAX_PASSWORD_BYTES]
 
-        return pwd_context.verify(plain_password, hashed_password)
+        return bcrypt.checkpw(password_bytes, hashed_password.encode('utf-8'))
     except Exception as e:
         logger.error(f"비밀번호 검증 중 오류 발생: {str(e)}", exc_info=True)
         return False
@@ -57,15 +54,14 @@ def get_password_hash(password: str) -> str:
         # bcrypt 제한 체크 (72바이트)
         password_bytes = password.encode('utf-8')
         if len(password_bytes) > MAX_PASSWORD_BYTES:
-            error_msg = f"비밀번호는 최대 {MAX_PASSWORD_BYTES}바이트까지 허용됩니다 (현재: {len(password_bytes)}바이트)"
-            logger.error(error_msg)
-            raise ValueError(error_msg)
+            logger.warning(f"비밀번호가 {MAX_PASSWORD_BYTES}바이트를 초과하여 자동으로 자릅니다. (현재: {len(password_bytes)}바이트)")
+            password_bytes = password_bytes[:MAX_PASSWORD_BYTES]
 
-        hashed = pwd_context.hash(password)
+        # bcrypt로 해싱
+        salt = bcrypt.gensalt()
+        hashed = bcrypt.hashpw(password_bytes, salt)
         logger.debug("비밀번호 해싱 완료")
-        return hashed
-    except ValueError:
-        raise
+        return hashed.decode('utf-8')
     except Exception as e:
         logger.error(f"비밀번호 해싱 중 오류 발생: {str(e)}", exc_info=True)
         raise ValueError(f"비밀번호 해싱 실패: {str(e)}")

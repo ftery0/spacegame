@@ -10,66 +10,11 @@ from models.user import User
 from schemas.user import UserCreate, UserLogin, UserResponse
 from schemas.common import Token
 from services.auth_service import AuthService
-from core.security import decode_token
+from core.dependencies import get_current_user
 
 logger = logging.getLogger(__name__)
 router = APIRouter(prefix="/api/auth", tags=["인증"])
 limiter = Limiter(key_func=get_remote_address)
-
-
-async def get_current_user(
-    request: Request,
-    db: Session = Depends(get_db)
-) -> User:
-    """
-    현재 로그인한 사용자 조회
-
-    Args:
-        request: HTTP 요청
-        db: 데이터베이스 세션
-
-    Returns:
-        User: 현재 사용자
-
-    Raises:
-        HTTPException: 인증 실패 시
-    """
-    # Bearer 토큰 추출
-    auth_header = request.headers.get("Authorization")
-    if not auth_header or not auth_header.startswith("Bearer "):
-        raise HTTPException(
-            status_code=status.HTTP_401_UNAUTHORIZED,
-            detail="인증 정보가 유효하지 않습니다",
-            headers={"WWW-Authenticate": "Bearer"},
-        )
-
-    token = auth_header.split(" ")[1]
-    payload = decode_token(token)
-
-    if payload is None:
-        raise HTTPException(
-            status_code=status.HTTP_401_UNAUTHORIZED,
-            detail="인증 정보가 유효하지 않습니다",
-            headers={"WWW-Authenticate": "Bearer"},
-        )
-
-    username: str = payload.get("sub")
-    if username is None:
-        raise HTTPException(
-            status_code=status.HTTP_401_UNAUTHORIZED,
-            detail="인증 정보가 유효하지 않습니다",
-            headers={"WWW-Authenticate": "Bearer"},
-        )
-
-    user = db.query(User).filter(User.username == username).first()
-    if user is None:
-        raise HTTPException(
-            status_code=status.HTTP_401_UNAUTHORIZED,
-            detail="사용자를 찾을 수 없습니다",
-            headers={"WWW-Authenticate": "Bearer"},
-        )
-
-    return user
 
 
 @router.post("/register", response_model=Token, status_code=status.HTTP_201_CREATED)
