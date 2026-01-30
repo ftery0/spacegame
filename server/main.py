@@ -1,11 +1,13 @@
 """FastAPI 게임 서버 메인 애플리케이션"""
 import logging
-from fastapi import FastAPI, HTTPException, status
+from fastapi import FastAPI, HTTPException, status, Request
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.responses import JSONResponse
 from slowapi import Limiter
 from slowapi.util import get_remote_address
 from slowapi.errors import RateLimitExceeded
 import uvicorn
+import traceback
 
 from database import init_db
 from core.config import settings
@@ -25,6 +27,20 @@ app = FastAPI(
     description="회원가입, 로그인, 점수 저장 및 랭킹 시스템을 제공하는 API",
     version=settings.APP_VERSION
 )
+
+# 전역 예외 처리 핸들러
+@app.exception_handler(Exception)
+async def global_exception_handler(request: Request, exc: Exception):
+    """모든 예외를 로깅하고 사용자에게 안전한 메시지 반환"""
+    logger.error(
+        f"예외 발생 - 경로: {request.url.path}, 메서드: {request.method}\n"
+        f"에러: {str(exc)}\n"
+        f"상세:\n{traceback.format_exc()}"
+    )
+    return JSONResponse(
+        status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+        content={"detail": "서버 오류가 발생했습니다. 잠시 후 다시 시도해주세요."}
+    )
 
 # Rate Limiting 미들웨어 추가
 app.state.limiter = limiter

@@ -35,4 +35,8 @@ def setup_logging(log_level: str = "INFO"):
     logging.getLogger("uvicorn.access").setLevel(logging.WARNING)
     logging.getLogger("uvicorn.error").setLevel(logging.INFO)
 
+    # passlib과 bcrypt 관련 로그도 출력
+    logging.getLogger("passlib").setLevel(logging.WARNING)
+    logging.getLogger("bcrypt").setLevel(logging.WARNING)
+
     return logging.getLogger(__name__)

@@ -6,7 +6,7 @@ from datetime import datetime
 class UserCreate(BaseModel):
     """회원가입 요청"""
     username: str = Field(..., min_length=3, max_length=20, description="사용자 이름 (3-20자)")
-    password: str = Field(..., min_length=4, max_length=50, description="비밀번호 (4자 이상)")
+    password: str = Field(..., min_length=4, max_length=50, description="비밀번호 (4-50자, bcrypt 제한으로 72바이트까지)")
 
 
 class UserLogin(BaseModel):

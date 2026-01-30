@@ -1,10 +1,13 @@
 """인증 비즈니스 로직"""
+import logging
 from typing import Optional, Tuple
 from sqlalchemy.orm import Session
 from core.security import get_password_hash, verify_password, create_access_token
 from core.config import settings
 from repositories.user_repository import UserRepository
 from models.user import User
+
+logger = logging.getLogger(__name__)
 
 
 class AuthService:
@@ -31,18 +34,31 @@ class AuthService:
         Returns:
             Tuple[bool, Optional[User], Optional[str]]: (성공 여부, 사용자, 에러 메시지)
         """
-        # 사용자명 중복 확인
-        if self.user_repo.user_exists(username):
-            return False, None, "이미 사용 중인 사용자 이름입니다"
+        logger.info(f"회원가입 시도: username={username}")
 
-        # 비밀번호 해싱
-        hashed_password = get_password_hash(password)
-
-        # 사용자 생성
         try:
+            # 사용자명 중복 확인
+            if self.user_repo.user_exists(username):
+                logger.warning(f"이미 존재하는 사용자명: {username}")
+                return False, None, "이미 사용 중인 사용자 이름입니다"
+
+            # 비밀번호 해싱
+            try:
+                hashed_password = get_password_hash(password)
+            except ValueError as e:
+                logger.error(f"비밀번호 해싱 실패: {str(e)}")
+                return False, None, "비밀번호가 너무 깁니다. 더 짧은 비밀번호를 사용해주세요."
+            except Exception as e:
+                logger.error(f"비밀번호 해싱 중 예상치 못한 오류: {str(e)}", exc_info=True)
+                return False, None, "비밀번호 처리 중 오류가 발생했습니다."
+
+            # 사용자 생성
             user = self.user_repo.create_user(username, hashed_password)
+            logger.info(f"회원가입 성공: user_id={user.id}, username={username}")
             return True, user, None
+
         except Exception as e:
+            logger.error(f"회원가입 중 오류 발생: username={username}, error={str(e)}", exc_info=True)
             return False, None, f"사용자 등록 중 오류 발생: {str(e)}"
 
     def login_user(self, username: str, password: str) -> Tuple[bool, Optional[User], Optional[str]]:
@@ -56,16 +72,26 @@ class AuthService:
         Returns:
             Tuple[bool, Optional[User], Optional[str]]: (성공 여부, 사용자, 에러 메시지)
         """
-        # 사용자 조회
-        user = self.user_repo.get_by_username(username)
-        if not user:
-            return False, None, "사용자 이름 또는 비밀번호가 올바르지 않습니다"
+        logger.info(f"로그인 시도: username={username}")
 
-        # 비밀번호 검증
-        if not verify_password(password, user.hashed_password):
-            return False, None, "사용자 이름 또는 비밀번호가 올바르지 않습니다"
+        try:
+            # 사용자 조회
+            user = self.user_repo.get_by_username(username)
+            if not user:
+                logger.warning(f"존재하지 않는 사용자: {username}")
+                return False, None, "사용자 이름 또는 비밀번호가 올바르지 않습니다"
 
-        return True, user, None
+            # 비밀번호 검증
+            if not verify_password(password, user.hashed_password):
+                logger.warning(f"비밀번호 불일치: username={username}")
+                return False, None, "사용자 이름 또는 비밀번호가 올바르지 않습니다"
+
+            logger.info(f"로그인 성공: user_id={user.id}, username={username}")
+            return True, user, None
+
+        except Exception as e:
+            logger.error(f"로그인 중 오류 발생: username={username}, error={str(e)}", exc_info=True)
+            return False, None, "로그인 처리 중 오류가 발생했습니다."
 
     def create_access_token_for_user(self, user: User) -> str:
         """
