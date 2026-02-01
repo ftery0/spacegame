@@ -1,0 +1,44 @@
+{
+  "easy": {
+    "id": 1,
+    "name": "easy",
+    "display_name": "초급",
+    "stone_speed": 1.5,
+    "stone_spawn_interval": 120,
+    "enemy_spawn_chance": 0.15,
+    "enemy_speed": 2.0,
+    "enemy_evasion_skill": 0.7,
+    "enemy_attack_rate": 120,
+    "score_multiplier": 1.0,
+    "player_health": 5,
+    "created_at": "2026-01-28T12:44:07"
+  },
+  "medium": {
+    "id": 2,
+    "name": "medium",
+    "display_name": "중급",
+    "stone_speed": 2.5,
+    "stone_spawn_interval": 80,
+    "enemy_spawn_chance": 0.25,
+    "enemy_speed": 3.0,
+    "enemy_evasion_skill": 0.85,
+    "enemy_attack_rate": 90,
+    "score_multiplier": 1.5,
+    "player_health": 3,
+    "created_at": "2026-01-28T12:44:07"
+  },
+  "hard": {
+    "id": 3,
+    "name": "hard",
+    "display_name": "고급",
+    "stone_speed": 3.5,
+    "stone_spawn_interval": 50,
+    "enemy_spawn_chance": 0.4,
+    "enemy_speed": 4.5,
+    "enemy_evasion_skill": 0.95,
+    "enemy_attack_rate": 60,
+    "score_multiplier": 2.0,
+    "player_health": 3,
+    "created_at": "2026-01-28T12:44:07"
+  }
+}
