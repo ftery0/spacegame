@@ -36,11 +36,23 @@ def startView():
         # API 클라이언트 초기화
         api_client = GameAPIClient()
 
+        # 자동 로그인 확인
+        auto_login_success = False
+        if api_client.is_logged_in():
+            logger.info("기존 세션 발견, 유효성 확인 중...")
+            if api_client.validate_token():
+                logger.info(f"자동 로그인 성공: {api_client.session_manager.username}")
+                auto_login_success = True
+            else:
+                logger.info("세션 만료됨, 다시 로그인 필요")
+                api_client.logout()
+
         # 난이도 관리자 초기화
         difficulty_manager = DifficultyManager()
 
-        # 서버에서 난이도 설정 가져오기
+        # 서버에서 난이도 설정 가져오기 (비동기 고려 가능하나 여기서는 동기 유지하되 타임아웃 짧게)
         try:
+            # 연결 확인 겸용
             success, difficulties, error = api_client.get_difficulties()
             if success and difficulties:
                 difficulty_manager.update_from_api(difficulties)
@@ -66,16 +78,29 @@ def startView():
         # 리소스 로드
         try:
             backGImg = load_image(Resources.BACKGROUND, (SCREEN_WIDTH, SCREEN_HEIGHT))
-            load_music(Resources.BACKGROUND_MUSIC)
-            pygame.mixer.music.play(-1)
+            if load_music(Resources.BACKGROUND_MUSIC):
+                pygame.mixer.music.play(-1)
             font = load_font(Resources.MAIN_FONT, UI.FONT_SIZE_LARGE)
         except (FileNotFoundError, pygame.error) as e:
-            show_error_dialog("리소스 로드 오류", str(e))
+            show_error_dialog("리소스 로드 오류", f"필수 리소스 로드 실패: {e}")
             return
 
         # 메인 루프
         running = True
+        first_run = True
+
         while running:
+            # 자동 로그인 성공 시 바로 게임 시작 루틴 진입
+            if first_run and auto_login_success:
+                first_run = False
+                pygame.mixer.music.stop()
+                show_difficulty_screen(startScr, backGImg, difficulty_manager)
+                gameview.gameStart(api_client, difficulty_manager)
+                if load_music(Resources.BACKGROUND_MUSIC):
+                    pygame.mixer.music.play(-1)
+                # 게임이 끝나고 돌아오면 메뉴 화면을 보여줘야 하므로 continue 없이 진행하거나
+                # 이벤트를 처리하도록 둠. 단, 여기서는 바로 메뉴 루프로 떨어짐.
+
             for event in pygame.event.get():
                 if event.type == pygame.QUIT:
                     running = False
@@ -92,71 +117,50 @@ def startView():
                                 show_difficulty_screen(startScr, backGImg, difficulty_manager)
                                 gameview.gameStart(api_client, difficulty_manager)
                             # 음악 재시작
-                            try:
-                                load_music(Resources.BACKGROUND_MUSIC)
+                            if load_music(Resources.BACKGROUND_MUSIC):
                                 pygame.mixer.music.play(-1)
-                            except pygame.error:
-                                pass
                         else:
                             # 이미 로그인된 경우 난이도 선택 -> 게임 시작
                             pygame.mixer.music.stop()
                             show_difficulty_screen(startScr, backGImg, difficulty_manager)
                             gameview.gameStart(api_client, difficulty_manager)
-                            try:
-                                load_music(Resources.BACKGROUND_MUSIC)
+                            if load_music(Resources.BACKGROUND_MUSIC):
                                 pygame.mixer.music.play(-1)
-                            except pygame.error:
-                                pass
 
                     elif rankingBtn.collidepoint(event.pos):
                         # 랭킹 화면
                         pygame.mixer.music.stop()
                         show_ranking_screen(startScr, backGImg, api_client)
-                        try:
-                            load_music(Resources.BACKGROUND_MUSIC)
+                        if load_music(Resources.BACKGROUND_MUSIC):
                             pygame.mixer.music.play(-1)
-                        except pygame.error:
-                            pass
 
                     elif profileBtn.collidepoint(event.pos):
                         # 프로필 화면
                         pygame.mixer.music.stop()
                         show_profile_screen(startScr, backGImg, api_client)
-                        try:
-                            load_music(Resources.BACKGROUND_MUSIC)
+                        if load_music(Resources.BACKGROUND_MUSIC):
                             pygame.mixer.music.play(-1)
-                        except pygame.error:
-                            pass
 
                     elif statsBtn.collidepoint(event.pos):
                         # 통계 화면
                         pygame.mixer.music.stop()
                         show_stats_screen(api_client)
-                        try:
-                            load_music(Resources.BACKGROUND_MUSIC)
+                        if load_music(Resources.BACKGROUND_MUSIC):
                             pygame.mixer.music.play(-1)
-                        except pygame.error:
-                            pass
 
                     elif achievementBtn.collidepoint(event.pos):
                         # 업적 화면
                         pygame.mixer.music.stop()
                         show_achievement_screen(api_client)
-                        try:
-                            load_music(Resources.BACKGROUND_MUSIC)
+                        if load_music(Resources.BACKGROUND_MUSIC):
                             pygame.mixer.music.play(-1)
-                        except pygame.error:
-                            pass
 
                     elif startinfom.collidepoint(event.pos):
                         pygame.mixer.music.stop()
                         gameview.gameinform()
                         # 정보 화면에서 돌아왔을 때 음악 재시작
-                        try:
-                            load_music(Resources.BACKGROUND_MUSIC)
+                        if load_music(Resources.BACKGROUND_MUSIC):
                             pygame.mixer.music.play(-1)
-                        except pygame.error:
-                            pass
 
                     elif stopbt.collidepoint(event.pos):
                         running = False

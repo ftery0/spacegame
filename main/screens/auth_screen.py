@@ -43,6 +43,7 @@ class AuthScreen(BaseScreen):
         self.message = ""
         self.message_color = WHITE
         self.login_success = False
+        self.is_loading = False
 
         # 애니메이션
         self.time = 0
@@ -82,10 +83,16 @@ class AuthScreen(BaseScreen):
         # 버튼
         button_width = 380
         button_x = (SCREEN_WIDTH - button_width) // 2
-        self.submit_button = pygame.Rect(button_x, self.container_y + 400, button_width, 60)
-        self.skip_button = pygame.Rect(button_x, self.container_y + 480, button_width, 48)
+        self.submit_button = pygame.Rect(button_x, self.container_y + 420, button_width, 60)
 
     def handle_events(self) -> bool:
+        if self.is_loading:
+            # 로딩 중에는 모든 입력 무시 (단, 윈도우 닫기는 허용)
+            for event in pygame.event.get():
+                if event.type == pygame.QUIT:
+                    return False
+            return True
+
         for event in pygame.event.get():
             if event.type == pygame.QUIT:
                 return False
@@ -112,60 +119,76 @@ class AuthScreen(BaseScreen):
                 if self.submit_button.collidepoint(mouse_pos):
                     self._handle_submit()
 
-                if self.skip_button.collidepoint(mouse_pos):
-                    return False
-
             if event.type == pygame.KEYDOWN:
                 self._handle_keydown(event)
 
-        return True
+        return self.running
 
     def _handle_submit(self):
         if not self.username.strip() or not self.password.strip():
             self.message = "아이디와 비밀번호를 입력하세요"
             self.message_color = self.COLOR_ERROR
             self.message_alpha = 255
-        else:
+            return
+
+        self.is_loading = True
+        self.message = "처리 중..."
+        self.message_color = self.COLOR_NEON_BLUE
+        self.message_alpha = 255
+
+        # 메인 루프에서 그리기 위해 강제 업데이트 (선택 사항)
+        self.render()
+        pygame.display.flip()
+
+        try:
             if not self.api_client.check_connection():
-                self.message = "서버 연결 실패 (오프라인 모드)"
+                self.message = "서버 연결 실패"
                 self.message_color = self.COLOR_ERROR
                 self.message_alpha = 255
+                self.is_loading = False
+                return
+
+            if self.mode == "login":
+                success, data, error = self.api_client.login(self.username.strip(), self.password)
+                if success:
+                    self.message = f"환영합니다!"
+                    self.message_color = self.COLOR_SUCCESS
+                    self.message_alpha = 255
+                    pygame.display.flip() # 메시지 보여주기
+                    pygame.time.wait(800)
+                    self.login_success = True
+                    self.running = False
+                else:
+                    self.message = error if error else "로그인 실패"
+                    self.message_color = self.COLOR_ERROR
+                    self.message_alpha = 255
             else:
-                if self.mode == "login":
-                    success, data, error = self.api_client.login(self.username.strip(), self.password)
+                if len(self.username.strip()) < 3:
+                    self.message = "아이디는 3자 이상"
+                    self.message_color = self.COLOR_ERROR
+                    self.message_alpha = 255
+                elif len(self.password) < 4:
+                    self.message = "비밀번호는 4자 이상"
+                    self.message_color = self.COLOR_ERROR
+                    self.message_alpha = 255
+                else:
+                    success, data, error = self.api_client.register(self.username.strip(), self.password)
                     if success:
-                        self.message = f"환영합니다!"
+                        self.message = "회원가입 완료! 로그인 해주세요."
                         self.message_color = self.COLOR_SUCCESS
                         self.message_alpha = 255
-                        pygame.time.wait(800)
-                        self.login_success = True
-                        self.running = False
+                        self.mode = "login" # 로그인 모드로 전환
+                        # 비밀번호는 유지하거나 지움 (사용자 편의상 유지)
                     else:
-                        self.message = error if error else "로그인 실패"
+                        self.message = error if error else "회원가입 실패"
                         self.message_color = self.COLOR_ERROR
                         self.message_alpha = 255
-                else:
-                    if len(self.username.strip()) < 3:
-                        self.message = "아이디는 3자 이상"
-                        self.message_color = self.COLOR_ERROR
-                        self.message_alpha = 255
-                    elif len(self.password) < 4:
-                        self.message = "비밀번호는 4자 이상"
-                        self.message_color = self.COLOR_ERROR
-                        self.message_alpha = 255
-                    else:
-                        success, data, error = self.api_client.register(self.username.strip(), self.password)
-                        if success:
-                            self.message = "회원가입 완료!"
-                            self.message_color = self.COLOR_SUCCESS
-                            self.message_alpha = 255
-                            pygame.time.wait(800)
-                            self.login_success = True
-                            self.running = False
-                        else:
-                            self.message = error if error else "회원가입 실패"
-                            self.message_color = self.COLOR_ERROR
-                            self.message_alpha = 255
+        except Exception as e:
+            self.message = f"오류 발생: {str(e)}"
+            self.message_color = self.COLOR_ERROR
+            self.message_alpha = 255
+        finally:
+            self.is_loading = False
 
     def _handle_keydown(self, event):
         if event.key == pygame.K_TAB:
@@ -243,12 +266,6 @@ class AuthScreen(BaseScreen):
             True,
             mouse_pos
         )
-        self._draw_button(
-            self.skip_button,
-            "건너뛰기",
-            False,
-            mouse_pos
-        )
 
         # 메시지
         if self.message and self.message_alpha > 0:
@@ -311,7 +328,7 @@ class AuthScreen(BaseScreen):
 
         # 서브타이틀
         subtitle = "로그인하여 게임을 시작하세요"
-        sub_surface = self.font_small.render(subtitle, True, self.COLOR_TEXT_DIM)
+        sub_surface = self.font_subtitle.render(subtitle, True, self.COLOR_TEXT_DIM)
         sub_rect = sub_surface.get_rect(center=(SCREEN_WIDTH // 2, self.title_y + 50))
         self.screen.blit(sub_surface, sub_rect)
 
@@ -441,7 +458,11 @@ class AuthScreen(BaseScreen):
             pygame.draw.rect(self.screen, (120, 120, 140), rect, 1, border_radius=24)
 
         # 텍스트
-        text_surf = self.font_large.render(text, True, self.COLOR_TEXT)
+        display_text = text
+        if is_primary and self.is_loading:
+            display_text = "처리 중..." if pygame.time.get_ticks() % 1000 < 500 else "처리 중.. "
+
+        text_surf = self.font_large.render(display_text, True, self.COLOR_TEXT)
         text_rect = text_surf.get_rect(center=rect.center)
         self.screen.blit(text_surf, text_rect)
 

@@ -213,6 +213,27 @@ class GameAPIClient:
         except requests.exceptions.RequestException as e:
             return False, None, f"네트워크 오류: {str(e)}"
 
+    def validate_token(self) -> bool:
+        """
+        현재 토큰 유효성 확인
+
+        Returns:
+            bool: 토큰 유효 여부
+        """
+        if not self.session_manager.is_logged_in():
+            return False
+
+        try:
+            # 프로필이나 통계 등 토큰이 필요한 간단한 엔드포인트 호출
+            response = requests.get(
+                f"{self.base_url}/api/auth/me", # 이 엔드포인트가 있다고 가정하거나 /api/scores/my 사용
+                headers=self._get_headers(),
+                timeout=3
+            )
+            return response.status_code == 200
+        except:
+            return False
+
     def check_connection(self) -> bool:
         """
         서버 연결 확인
@@ -221,7 +242,7 @@ class GameAPIClient:
             bool: 연결 여부
         """
         try:
-            response = requests.get(f"{self.base_url}/health", timeout=3)
+            response = requests.get(f"{self.base_url}/health", timeout=2)
             return response.status_code == 200
         except requests.exceptions.RequestException:
             return False
@@ -236,7 +257,7 @@ class GameAPIClient:
         try:
             response = requests.get(
                 f"{self.base_url}/api/difficulties",
-                timeout=5
+                timeout=2
             )
 
             if response.status_code == 200:
