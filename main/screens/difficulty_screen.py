@@ -86,19 +86,25 @@ class DifficultyScreen(BaseScreen):
                 elif self.confirm_button.collidepoint(mouse_pos):
                     self.difficulty_manager.set_difficulty(self.selected_difficulty)
                     self.running = False
-                    return True
+                    self.difficulty_manager.set_difficulty(self.selected_difficulty)
+                    self.running = False
+                    return self.running
 
                 # 뒤로 가기
                 elif self.back_button.collidepoint(mouse_pos):
                     self.running = False
-                    return True
+                elif self.back_button.collidepoint(mouse_pos):
+                    self.running = False
+                    return self.running
 
             if event.type == pygame.KEYDOWN:
                 if event.key == pygame.K_ESCAPE:
                     self.running = False
-                    return True
+                if event.key == pygame.K_ESCAPE:
+                    self.running = False
+                    return self.running
 
-        return True
+        return self.running
 
     def update(self):
         """상태 업데이트 (현재 필요 없음)"""
@@ -145,7 +151,7 @@ class DifficultyScreen(BaseScreen):
             color = info["color"]
             border_width = 3
         else:
-            color = (color_val // 2 for color_val in info["color"])
+            color = tuple(color_val // 2 for color_val in info["color"])
             border_width = 2
 
         # 버튼 배경
