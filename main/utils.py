@@ -39,19 +39,17 @@ def load_sound(path):
         path: 사운드 파일 경로
 
     Returns:
-        pygame.mixer.Sound: 로드된 사운드
-
-    Raises:
-        FileNotFoundError: 파일이 존재하지 않을 때
-        pygame.error: 사운드 로드 실패 시
+        pygame.mixer.Sound: 로드된 사운드 또는 None (실패 시)
     """
-    if not os.path.exists(path):
-        raise FileNotFoundError(f"사운드 파일을 찾을 수 없습니다: {path}")
+    if not os.path.exists(path) or os.path.getsize(path) == 0:
+        print(f"Warning: 사운드 파일을 찾을 수 없거나 비어 있음: {path}")
+        return None
 
     try:
         return pygame.mixer.Sound(path)
     except pygame.error as e:
-        raise pygame.error(f"사운드 로드 실패 ({path}): {e}")
+        print(f"Warning: 사운드 로드 실패 ({path}): {e}")
+        return None
 
 
 def load_music(path):
@@ -61,41 +59,63 @@ def load_music(path):
     Args:
         path: 음악 파일 경로
 
-    Raises:
-        FileNotFoundError: 파일이 존재하지 않을 때
-        pygame.error: 음악 로드 실패 시
+    Returns:
+        bool: 로드 성공 여부
     """
     if not os.path.exists(path):
-        raise FileNotFoundError(f"음악 파일을 찾을 수 없습니다: {path}")
+        print(f"Warning: 음악 파일을 찾을 수 없습니다: {path}")
+        return False
 
     try:
         pygame.mixer.music.load(path)
+        return True
     except pygame.error as e:
-        raise pygame.error(f"음악 로드 실패 ({path}): {e}")
+        print(f"Warning: 음악 로드 실패 ({path}): {e}")
+        return False
 
 
 def load_font(path, size):
     """
-    폰트를 안전하게 로드
+    폰트를 안전하게 로드 (로드 실패 시 기본 시스템 폰트 반환)
 
     Args:
         path: 폰트 파일 경로
         size: 폰트 크기
 
     Returns:
-        pygame.font.Font: 로드된 폰트
-
-    Raises:
-        FileNotFoundError: 파일이 존재하지 않을 때
-        pygame.error: 폰트 로드 실패 시
+        pygame.font.Font: 로드된 폰트 또는 시스템 폰트
     """
-    if not os.path.exists(path):
-        raise FileNotFoundError(f"폰트 파일을 찾을 수 없습니다: {path}")
-
-    try:
-        return pygame.font.Font(path, size)
-    except pygame.error as e:
-        raise pygame.error(f"폰트 로드 실패 ({path}): {e}")
+    # 1. 파일에서 로드 시도
+    if os.path.exists(path) and os.path.getsize(path) > 0:
+        try:
+            return pygame.font.Font(path, size)
+        except pygame.error as e:
+            print(f"Warning: 폰트 파일 로드 실패 ({path}): {e}")
+    
+    # 2. 시스템 폰트 시도 (한국어 지원 폰트 우선순위)
+    # Windows: malgungothic, gulim, dotum
+    # Mac/Linux: nanumgothic, applesdgothicneo
+    system_fonts = [
+        'malgungothic', '맑은 고딕', 
+        'gulim', '굴림', 
+        'dotum', '돋움',
+        'nanumgothic', '나눔고딕',
+        'arial', 'sans-serif'
+    ]
+    
+    # 설치된 폰트 목록 확인
+    available_fonts = pygame.font.get_fonts()
+    
+    for font_name in system_fonts:
+        # 영문 이름으로 시도
+        if font_name.lower().replace(" ", "") in available_fonts:
+            try:
+                return pygame.font.SysFont(font_name, size)
+            except:
+                continue
+    
+    # 3. 마지막 수단: 기본 폰트
+    return pygame.font.SysFont(None, size)
 
 
 def create_button_rect(config):

@@ -10,6 +10,10 @@ else:
     # 일반 Python 스크립트 실행
     PROJECT_ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 
+# 전역 루트 디렉토리 (main의 부모)
+GLOBAL_ROOT = os.path.dirname(PROJECT_ROOT)
+GLOBAL_TEXTURE_DIR = os.path.join(GLOBAL_ROOT, "texture")
+
 # 리소스 경로
 TEXTURE_DIR = os.path.join(PROJECT_ROOT, "texture")
 FONT_DIR = os.path.join(PROJECT_ROOT, "font")
@@ -71,7 +75,7 @@ class Resources:
     """리소스 파일 경로 관리"""
 
     # 이미지
-    BACKGROUND = os.path.join(TEXTURE_DIR, "back_ground_Ui.gif")
+    BACKGROUND = os.path.join(GLOBAL_TEXTURE_DIR, "videos", "back_ground_Ui.gif")
     PLAYER = os.path.join(TEXTURE_DIR, "player.png")
     STONE = os.path.join(TEXTURE_DIR, "rock1.png")
     MISSILE = os.path.join(TEXTURE_DIR, "mix.png")
@@ -79,12 +83,12 @@ class Resources:
     HEART_FULL = os.path.join(TEXTURE_DIR, "heart.png")
     HEART_EMPTY = os.path.join(TEXTURE_DIR, "heart2.png")
     SKILL_ICON = os.path.join(TEXTURE_DIR, "skill.png")
-    ENEMY = os.path.join(TEXTURE_DIR, "rock1.png")  # TODO: 전용 적 이미지 추가
-    ENEMY_PROJECTILE = os.path.join(TEXTURE_DIR, "mix.png")  # TODO: 전용 발사체 이미지 추가
+    ENEMY = os.path.join(TEXTURE_DIR, "rock1.png")
+    ENEMY_PROJECTILE = os.path.join(TEXTURE_DIR, "mix.png")
 
     # 사운드
-    BACKGROUND_MUSIC = os.path.join(TEXTURE_DIR, "backsound.mp3")
-    MISSILE_SOUND = os.path.join(TEXTURE_DIR, "laser2.mp3")
+    BACKGROUND_MUSIC = os.path.join(GLOBAL_TEXTURE_DIR, "videos", "backsound.mp3")
+    MISSILE_SOUND = os.path.join(GLOBAL_TEXTURE_DIR, "videos", "laser2.mp3")
 
     # 적 레이저 사운드 (나중에 사용자가 제공)
     ENEMY_LASER_CHARGE_SOUND = os.path.join(PROJECT_ROOT, "sounds", "enemy_laser_charge.mp3")  # TODO: 충전 사운드 추가 필요

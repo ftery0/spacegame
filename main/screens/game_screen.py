@@ -462,24 +462,16 @@ def gameStart(api_client=None, difficulty_manager=None):
             enemy_proj_img = load_image(Resources.ENEMY_PROJECTILE, (MISSILE_WIDTH, MISSILE_HEIGHT))
 
             missile_sound = load_sound(Resources.MISSILE_SOUND)
-            load_music(Resources.BACKGROUND_MUSIC)
-            pygame.mixer.music.play(-1)
+            if load_music(Resources.BACKGROUND_MUSIC):
+                pygame.mixer.music.play(-1)
 
             # 적 레이저 사운드 (선택적 로드 - 파일이 없어도 계속 진행)
-            enemy_laser_charge_sound = None
-            enemy_laser_fire_sound = None
-            try:
-                import os
-                if os.path.exists(Resources.ENEMY_LASER_CHARGE_SOUND):
-                    enemy_laser_charge_sound = load_sound(Resources.ENEMY_LASER_CHARGE_SOUND)
-                if os.path.exists(Resources.ENEMY_LASER_FIRE_SOUND):
-                    enemy_laser_fire_sound = load_sound(Resources.ENEMY_LASER_FIRE_SOUND)
-            except Exception as e:
-                logger.warning(f"적 레이저 사운드 로드 실패 (선택사항): {e}")
+            enemy_laser_charge_sound = load_sound(Resources.ENEMY_LASER_CHARGE_SOUND)
+            enemy_laser_fire_sound = load_sound(Resources.ENEMY_LASER_FIRE_SOUND)
 
             font = load_font(Resources.MAIN_FONT, UI.FONT_SIZE_MEDIUM)
         except (FileNotFoundError, pygame.error) as e:
-            show_error_dialog("게임 리소스 로드 오류", str(e))
+            show_error_dialog("게임 리소스 로드 오류", f"필수 리소스 로드 실패: {e}")
             return
 
         # 게임 상태 초기화
@@ -533,10 +525,11 @@ def gameStart(api_client=None, difficulty_manager=None):
                                 game_state.missiles_fired += 1
                                 game_state.statistics.on_missile_fired(1)
 
-                            try:
-                                missile_sound.play()
-                            except pygame.error:
-                                pass
+                            if missile_sound:
+                                try:
+                                    missile_sound.play()
+                                except pygame.error:
+                                    pass
 
                     elif event.key == pygame.K_f or event.unicode == "ㄹ":
                         # 스킬 사용

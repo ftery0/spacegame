@@ -12,8 +12,8 @@ class CollisionDetector:
 
     @staticmethod
     def check_missile_stone_collision(
-        missiles: List[Missile],
-        stones: List[Stone]
+        missiles: List['Missile'],
+        stones: List['Stone']
     ) -> List[Tuple[int, int]]:
         """
         미사일과 운석의 충돌 확인
@@ -36,8 +36,8 @@ class CollisionDetector:
 
     @staticmethod
     def check_player_stone_collision(
-        player: Player,
-        stones: List[Stone]
+        player: 'Player',
+        stones: List['Stone']
     ) -> List[int]:
         """
         플레이어와 운석의 충돌 확인
@@ -59,7 +59,7 @@ class CollisionDetector:
         return collisions
 
     @staticmethod
-    def check_missile_out_of_bounds(missiles: List[Missile]) -> List[int]:
+    def check_missile_out_of_bounds(missiles: List['Missile']) -> List[int]:
         """
         화면 범위를 벗어난 미사일 확인
 
@@ -78,7 +78,7 @@ class CollisionDetector:
         return out_of_bounds
 
     @staticmethod
-    def check_stone_out_of_bounds(stones: List[Stone]) -> List[int]:
+    def check_stone_out_of_bounds(stones: List['Stone']) -> List[int]:
         """
         화면 범위를 벗어난 운석 확인
 
